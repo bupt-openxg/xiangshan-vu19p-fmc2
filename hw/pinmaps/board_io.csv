@@ -1,0 +1,36 @@
+# PHINE PD-VU19P-2-LSI SOLO v3 板卡 IO 映射 (来源: P6 BSP Pinlist xls + IO.xdc)
+# 用途: fpga.xdc (PHINE) 生成依据
+category,signal,fpga_ball,iostandard,note
+uart,FP_UART_TX,BG14,LVCMOS33,后面板 RJ45 用户串口
+uart,FP_UART_RX,BH14,LVCMOS33,后面板 RJ45 用户串口
+clock,FP_CLK_200M_P,BW37,LVDS,板载固定 200MHz 差分 OSC -> clk6_p
+clock,FP_CLK_200M_N,BY37,LVDS,同上
+clock,FP_PLL_GCLK02_P,BM44,LVDS,AEConsole PLL 输出 80MHz -> clk7_p (DDR参考)
+clock,FP_PLL_GCLK02_N,BN44,LVDS,同上
+clock,FP_PLL_GCLK04_P,BA51,LVDS,AEConsole PLL 输出 25MHz -> clk5_p (CPU系统)
+clock,FP_PLL_GCLK04_N,BB51,LVDS,同上
+clock,FP_PLL_GCLK06_P,E57,LVDS,AEConsole PLL 输出 1MHz -> clk8_p (RTC)
+clock,FP_PLL_GCLK06_N,E58,LVDS,同上
+reset,PUSHSW1,BG18,LVCMOS33,按键 -> rstn_sw6 (系统复位)
+reset,PUSHSW2,BG17,LVCMOS33,按键 -> rstn_sw5 (CPU复位)
+led,LED1,AA16,LVCMOS33,-> led0 (cpu_wr_ddr_valid)
+led,LED2,AA14,LVCMOS33,-> led2 (cpu_rd_qspi_valid)
+led,LED3,AB13,LVCMOS33,-> led3 (init_calib_complete)
+led,LED4,AC14,LVCMOS33,备用
+led,LED5,AD15,LVCMOS33,备用
+led,LED6,AE17,LVCMOS33,备用
+led,LED7,AC16,LVCMOS33,备用
+led,LED8,AB17,LVCMOS33,备用
+led,LED9,AA15,LVCMOS33,备用
+led,LED10,AB14,LVCMOS33,备用
+led,LED11,AC13,LVCMOS33,备用
+led,LED12,AC15,LVCMOS33,备用
+led,LED13,AD16,LVCMOS33,备用
+led,LED14,AD17,LVCMOS33,备用
+led,LED15,AB16,LVCMOS33,备用
+led,LED16,AA17,LVCMOS33,备用
+jtag_rv,TCK,W13,LVCMOS33,GPIO排针CN43.3 (RISC-V调试口 可选)
+jtag_rv,TMS,V14,LVCMOS33,GPIO排针CN43.5
+jtag_rv,TDI,U13,LVCMOS33,GPIO排针CN43.7
+jtag_rv,TDO,Y13,LVCMOS33,GPIO排针CN43.9
+jtag_rv,TRSTn,Y15,LVCMOS33,GPIO排针CN43.11
