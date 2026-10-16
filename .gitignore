@@ -1,0 +1,57 @@
+# =============================================================================
+# ReConstruct .gitignore
+# 原则: 只忽略"可由脚本再生/由 flows 拉取"的大件与产物; 不用全局 *.log/*.txt
+#       (避免误伤 docs/evidence/*.log、pinmaps/*.csv 等需要入库的内容)
+# =============================================================================
+
+# ---- 依赖克隆 (由 flows/02_clone_deps.sh 拉取) ----
+/third_party/
+
+# ---- 构建产物 / 运行产物 ----
+/build/
+/logs/
+*.bit
+*.bin
+*.ltx
+*.dcp
+*.rpt
+.Xil/
+# 板卡诊断设计的 Vivado 工程 (由 hw/diag/build_diag.tcl 重建)
+/hw/diag/proj/
+
+# ---- 本地下装的工具链 (由 flows/01_setup_toolchain.sh 安装) ----
+# 刻意不带结尾斜杠: 目录与指向别处的符号链接都要忽略
+/tools/jdk
+/tools/mill
+/tools/sysroot
+/tools/aeconsole
+/tools/setup/cache
+/tools/bin
+
+# ---- 下载/生成的镜像与负载产物 ----
+/sw/linux/data.txt
+/sw/linux/data_kmh.zip
+/sw/linux/data_patched.txt
+/sw/baremetal/*.elf
+/sw/baremetal/*.o
+/sw/baremetal/*.bin
+/sw/baremetal/*.txt
+
+# ---- 可选: 厂商 BSP (PHINE 官方包, 自行放置; 仅 AEConsole 配置与引脚溯源需要) ----
+/board/
+
+# ---- Vivado 会话残留 ----
+vivado*.log
+vivado*.jou
+*.str
+
+# ---- Python 字节码 ----
+__pycache__/
+*.pyc
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
