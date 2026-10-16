@@ -1,0 +1,26 @@
+From 2b4e36d3d3a0925d0469331eaf143c3b212aae5a Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Mon, 12 Oct 2026 15:33:07 +0800
+Subject: [PATCH 02/12] phine: fix xs_uart.tcl tclargs switch -regexp
+ clobbering --cpu with --cpu_files
+
+---
+ fpga_diff/vivado/tcl/common/xs_uart.tcl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fpga_diff/vivado/tcl/common/xs_uart.tcl b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+index a56496c..f8b386f 100755
+--- a/fpga_diff/vivado/tcl/common/xs_uart.tcl
++++ b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+@@ -107,7 +107,7 @@ proc print_help { cpu_candidates } {
+ if { $::argc > 0 } {
+   for {set i 0} {$i < $::argc} {incr i} {
+     set option [string trim [lindex $::argv $i]]
+-    switch -regexp -- $option {
++    switch -exact -- $option {
+       "--cpu"          { incr i; set cpu [lindex $::argv $i] }
+       "--origin_dir"   { incr i; set origin_dir [lindex $::argv $i] }
+       "--project_name" { incr i; set _xil_proj_name_ [lindex $::argv $i] }
+-- 
+2.43.0
+

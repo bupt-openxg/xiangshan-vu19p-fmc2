@@ -1,0 +1,274 @@
+From 3d4256a40c3cc8d2b90f56ba75eba24ea54dbc81 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Fri, 16 Oct 2026 16:48:22 +0800
+Subject: [PATCH 11/12] phine: pure-VIO reset control + on-board observability
+ (v3)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- fpga_top_debug.sv: 复位完全去引脚依赖 —— sys_rstn_to_core / ddr_rstn_to_core
+  仅由 VIO 控制, cpu_rstn 只受 vio_sw5/sw6 控制; 复位引脚仅保留 DONT_TOUCH IBUF 作观测
+- fpga_top_debug.sv: VIO 输入探针接线 (CPU 取指/访存计数、DM 状态、复位链、串口引脚)
+- core_def_xdma.sv: 新增上板诊断计数器输出 (dbg_cfg_ar/r_cnt, dbg_ddr_ar_cnt,
+  dbg_uart_tx_edges, dbg_dm_state={ndreset,halt,critical_error})
+- kmh/SimTop_wrapper.sv: 驱动先前悬空的 io_debug_reset / halt / critical_error 输出
+- vivado/tcl/common/vio_0.tcl: 0 -> 7 个输入探针 (32/32/32/36/31/16/16)
+- vivado/constr/common/fpga.xdc: CN43 调试 JTAG 空闲态加固 (TCK 下拉, TMS/TDI 上拉),
+  防止悬空引脚随机时钟化 TAP 造成随机 DMI 访问
+
+上板实测 (2026-10-15): v3 比特流 CPU 正常运行, 裸机 Hello 与官方 Linux 镜像均跑通
+---
+ fpga_diff/src/rtl/common/core_def_xdma.sv  | 50 ++++++++++++++++++++++
+ fpga_diff/src/rtl/common/fpga_top_debug.sv | 48 +++++++++++++++++----
+ fpga_diff/src/rtl/kmh/SimTop_wrapper.sv    |  9 ++--
+ fpga_diff/vivado/constr/common/fpga.xdc    |  5 +++
+ fpga_diff/vivado/tcl/common/vio_0.tcl      |  9 +++-
+ 5 files changed, 107 insertions(+), 14 deletions(-)
+
+diff --git a/fpga_diff/src/rtl/common/core_def_xdma.sv b/fpga_diff/src/rtl/common/core_def_xdma.sv
+index e84bd87..a67bdbb 100755
+--- a/fpga_diff/src/rtl/common/core_def_xdma.sv
++++ b/fpga_diff/src/rtl/common/core_def_xdma.sv
+@@ -24,6 +24,14 @@ module core_def (
+       input                                      sys_rstn,
+       input                                      cpu_rstn,
+       input                                      rstn_sw4,
++      // === v3 上板诊断计数器 (VIO 输入探针观测) ===
++      output      [31:0]                         dbg_cfg_ar_cnt,
++      output      [31:0]                         dbg_cfg_r_cnt,
++      output      [31:0]                         dbg_ddr_ar_cnt,
++      output      [30:0]                         dbg_cfg_ar_addr,
++      output      [35:0]                         dbg_ddr_ar_addr,
++      output      [15:0]                         dbg_uart_tx_edges,
++      output      [2:0]                          dbg_dm_state,
+ `ifdef  XS_XDMA_EP
+       input       [`XDMA_PCIE_LANES-1:0]         pci_ep_rxn,
+       input       [`XDMA_PCIE_LANES-1:0]         pci_ep_rxp,
+@@ -514,6 +522,44 @@ wire           [3:0]                       cpu2ddr_m2s_awregion           ;
+ (*mark_debug = "true"*) wire           [7:0]                       cpu2ddr_m2s_arlen              ;
+ (*mark_debug = "true"*) wire           [2:0]                       cpu2ddr_m2s_arsize             ;
+ (*mark_debug = "true"*) wire           [1:0]                       cpu2ddr_m2s_arburst            ;
++
++// === v3 上板诊断计数器: 观测 CPU 是否发起取指/访存 (VIO 输入探针可读) ===
++reg [31:0] dbg_cfg_ar_cnt_r;
++reg [31:0] dbg_cfg_r_cnt_r;
++reg [31:0] dbg_ddr_ar_cnt_r;
++reg [30:0] dbg_cfg_ar_addr_r;
++reg [35:0] dbg_ddr_ar_addr_r;
++reg [15:0] dbg_uart_tx_edges_r;
++reg        uart0_sout_dbg_d;
++
++always @(posedge sys_clk_i) begin
++   if (cpu2cfg_m2s_arvalid && cpu2cfg_s2m_arready) begin
++      dbg_cfg_ar_cnt_r  <= dbg_cfg_ar_cnt_r + 1'b1;
++      dbg_cfg_ar_addr_r <= cpu2cfg_m2s_araddr;
++   end
++   if (cpu2cfg_s2m_rvalid && cpu2cfg_m2s_rready)
++      dbg_cfg_r_cnt_r <= dbg_cfg_r_cnt_r + 1'b1;
++   if (cpu2ddr_m2s_arvalid && cpu2ddr_s2m_arready) begin
++      dbg_ddr_ar_cnt_r  <= dbg_ddr_ar_cnt_r + 1'b1;
++      dbg_ddr_ar_addr_r <= cpu2ddr_m2s_araddr[35:0];
++   end
++   uart0_sout_dbg_d <= uart0_sout;
++   if (uart0_sout_dbg_d && !uart0_sout)
++      dbg_uart_tx_edges_r <= dbg_uart_tx_edges_r + 1'b1;
++end
++
++assign dbg_cfg_ar_cnt    = dbg_cfg_ar_cnt_r;
++assign dbg_cfg_r_cnt     = dbg_cfg_r_cnt_r;
++assign dbg_ddr_ar_cnt    = dbg_ddr_ar_cnt_r;
++assign dbg_cfg_ar_addr   = dbg_cfg_ar_addr_r;
++assign dbg_ddr_ar_addr   = dbg_ddr_ar_addr_r;
++assign dbg_uart_tx_edges = dbg_uart_tx_edges_r;
++
++wire dbg_ndreset_w;
++wire dbg_halt_w;
++wire dbg_criterr_w;
++assign dbg_dm_state = {dbg_ndreset_w, dbg_halt_w, dbg_criterr_w};
++
+ wire           [3:0]                       cpu2ddr_m2s_arcache            ;
+ wire           [2:0]                       cpu2ddr_m2s_arprot             ;
+ wire           [3:0]                       cpu2ddr_m2s_arqos              ;
+@@ -1768,6 +1814,10 @@ SimTop_wrapper U_CPU_TOP(
+ //    .io_systemjtag_reset            (io_systemjtag_reset),
+     .io_systemjtag_reset            (~sys_rstn_io),
+     .io_sram_config                 (5'b0  ),
++    // v3: 调试模块状态观测 (ndreset / 核心halt / 核心critical error)
++    .io_debug_reset                 (dbg_ndreset_w),
++    .io_riscv_halt_0                (dbg_halt_w),
++    .io_riscv_critical_error_0      (dbg_criterr_w),
+ 
+     .dma_core_awready               (data_cpu_bridge_s2m_awready),
+     .dma_core_awvalid               (data_cpu_bridge_m2s_awvalid),
+diff --git a/fpga_diff/src/rtl/common/fpga_top_debug.sv b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+index fbec88a..e6baf65 100755
+--- a/fpga_diff/src/rtl/common/fpga_top_debug.sv
++++ b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+@@ -120,8 +120,12 @@ assign sys_rstn_to_core = rstn_sw6;
+ assign cpu_rstn_to_core = rstn_sw5;
+ assign ddr_rstn_to_core = rstn_sw4;
+ `else
+-IBUF sys_rstn_ibuf (.O(sys_rstn), .I(rstn_sw6));
+-IBUF cpu_rstn_ibuf (.O(cpu_setn_buf), .I(rstn_sw5));
++// v3: 复位完全由 VIO 控制, 不使用板卡按键/引脚电平;
++//     引脚仅保留作观测 (DONT_TOUCH IBUF, VIO 输入探针可读)
++(* DONT_TOUCH = "TRUE" *) IBUF sys_rstn_ibuf (.O(sys_rstn), .I(rstn_sw6));
++(* DONT_TOUCH = "TRUE" *) IBUF cpu_rstn_ibuf (.O(cpu_setn_buf), .I(rstn_sw5));
++wire rstn_sw4_mon;
++(* DONT_TOUCH = "TRUE" *) IBUF rstn4_ibuf (.O(rstn_sw4_mon), .I(rstn_sw4));
+ `ifdef XS_XDMA_EP
+ OBUF pcie_rstn_obuf (.O(PERST_N), .I(vio_sw6));
+ OBUF pcie2_rstn_obuf (.O(PERST2_N), .I(vio_sw6));
+@@ -129,8 +133,8 @@ OBUF pcie2_rstn_obuf (.O(PERST2_N), .I(vio_sw6));
+ 
+ button_debounce u_cpu_rstn(
+    .clk             (sys_clk_i),
+-   .rstn            (sys_rstn && vio_sw6),
+-   .button_i        (cpu_setn_buf && vio_sw5),
++   .rstn            (vio_sw6),
++   .button_i        (vio_sw5),
+    .button_rflag    (cpu_setn_rflag)
+ );
+ 
+@@ -139,19 +143,18 @@ always@(posedge sys_clk_i)
+    vio_sw5_d <= vio_sw5;
+ 
+ always@(posedge sys_clk_i) begin
+-   if ((sys_rstn == 1'b0)||(vio_sw6 == 1'b0))
++   if (vio_sw6 == 1'b0)
+       cpu_rstn <= 1'b0;
+-   // 释放路径: 物理按键消抖脉冲, 或 VIO sw5 上升沿直通
+-   // (PHINE 板按键/引脚路径在实机上不可靠, 直通路径保证 reset_cpu 脚本必然生效)
++   // 释放: 消抖脉冲 或 VIO sw5 上升沿直通 (纯 VIO, 无引脚依赖)
+    else if (cpu_setn_rflag || (vio_sw5 && !vio_sw5_d))
+       cpu_rstn <= 1'b1;
+    else
+       cpu_rstn <= cpu_rstn;
+ end
+ 
+-assign sys_rstn_to_core = sys_rstn && vio_sw6;
++assign sys_rstn_to_core = vio_sw6;
+ assign cpu_rstn_to_core = cpu_rstn;
+-assign ddr_rstn_to_core = rstn_sw4 && vio_sw4;
++assign ddr_rstn_to_core = vio_sw4;
+ `endif
+ 
+ `ifdef XS_GMAC
+@@ -243,9 +246,28 @@ assign        dev_clk_i = dbg_clk_buf;
+ `endif
+ 
+ `ifndef UVHS
++// v3: VIO 输入探针 (CPU 活动/复位链/引脚 观测) + 输出 (sw4/5/6 复位控制)
++wire [31:0] dbg_cfg_ar_cnt;
++wire [31:0] dbg_cfg_r_cnt;
++wire [31:0] dbg_ddr_ar_cnt;
++wire [30:0] dbg_cfg_ar_addr;
++wire [35:0] dbg_ddr_ar_addr;
++wire [15:0] dbg_uart_tx_edges;
++wire [2:0]  dbg_dm_state;
++
+ vio_0 u_vio(
+    .clk        (dbg_clk_buf),
+ 
++   .probe_in0  (dbg_cfg_ar_cnt),
++   .probe_in1  (dbg_cfg_r_cnt),
++   .probe_in2  (dbg_ddr_ar_cnt),
++   .probe_in3  (dbg_ddr_ar_addr),
++   .probe_in4  (dbg_cfg_ar_addr),
++   .probe_in5  (dbg_uart_tx_edges),
++   .probe_in6  ({dbg_dm_state, 3'b0, vio_sw5, vio_sw6, rstn_sw4_mon, cpu_setn_buf,
++                 sys_rstn, cpu_rstn, cpu_setn_rflag, vio_sw5_d,
++                 uart0_sout, uart0_sin}),
++
+    .probe_out0 (vio_sw6),
+    .probe_out1 (vio_sw5),
+    .probe_out2 (vio_sw4)
+@@ -361,6 +383,14 @@ core_def core_def
+   .sys_rstn             (sys_rstn_to_core),
+   .cpu_rstn             (cpu_rstn_to_core),
+   .rstn_sw4             (ddr_rstn_to_core),
++  // v3 诊断计数器
++  .dbg_cfg_ar_cnt       (dbg_cfg_ar_cnt),
++  .dbg_cfg_r_cnt        (dbg_cfg_r_cnt),
++  .dbg_ddr_ar_cnt       (dbg_ddr_ar_cnt),
++  .dbg_cfg_ar_addr      (dbg_cfg_ar_addr),
++  .dbg_ddr_ar_addr      (dbg_ddr_ar_addr),
++  .dbg_uart_tx_edges    (dbg_uart_tx_edges),
++  .dbg_dm_state         (dbg_dm_state),
+   .dft_lgc_rst_n        (1'b1),
+   .dft_se               (1'b0),
+   .chip_mode_i          (2'b00), // normal mode
+diff --git a/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv b/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
+index 668156f..7ca1b3b 100755
+--- a/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
++++ b/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
+@@ -195,7 +195,8 @@ module SimTop_wrapper(
+   input [3:0]     io_systemjtag_version,
+   output          io_debug_reset,
+   output          io_riscv_halt_0,
+-  output          io_riscv_halt_1
++  output          io_riscv_halt_1,
++  output          io_riscv_critical_error_0
+ `ifndef NO_DIFF
+   ,
+   input           difftest_ref_clock,
+@@ -391,7 +392,7 @@ assign dma_core_rlast   = 1'b0;
+   .io_systemjtag_mfr_id            (11'h11),
+   .io_systemjtag_part_number       (16'h16),
+   .io_systemjtag_version           (4'h4),
+-  .io_debug_reset                  (io_debug_reset_int),
++  .io_debug_reset                  (io_debug_reset),
+ 
+ 
+   .io_sram_config                  (io_sram_config),
+@@ -521,8 +522,8 @@ assign dma_core_rlast   = 1'b0;
+   .io_cacheable_check_resp_1_instr   (),
+   .io_cacheable_check_resp_1_mmio    (),
+   .io_cacheable_check_resp_1_atomic    (),
+-  .io_riscv_halt_0                     (),
+-  .io_riscv_critical_error_0           (io_riscv_critical_error_0_int),
++  .io_riscv_halt_0                     (io_riscv_halt_0),
++  .io_riscv_critical_error_0           (io_riscv_critical_error_0),
+   .io_traceCoreInterface_0_fromEncoder_enable (trace_en),
+   .io_traceCoreInterface_0_fromEncoder_stall  (trace_stall),
+   .io_traceCoreInterface_0_toEncoder_cause    (trace_cause),
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index 26e2d46..0c0d98b 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -105,6 +105,11 @@ set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TDI]
+ set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TDO]
+ set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TRSTn]
+ set_property PULLUP true [get_ports JTAG_TRSTn]
++# RISC-V 调试 JTAG (CN43 排针) 空闲态加固: 悬空时防止随机时钟化 TAP -> 随机 DMI 访问扣核
++#   TCK 下拉 = 无时钟; TMS 上拉 = 任何杂散边沿都把 TAP 推向 Test-Logic-Reset
++set_property PULLDOWN true [get_ports JTAG_TCK]
++set_property PULLUP true [get_ports JTAG_TMS]
++set_property PULLUP true [get_ports JTAG_TDI]
+ 
+ ####################################################################################
+ # 时钟定义与时钟组
+diff --git a/fpga_diff/vivado/tcl/common/vio_0.tcl b/fpga_diff/vivado/tcl/common/vio_0.tcl
+index db46d96..653b6d3 100755
+--- a/fpga_diff/vivado/tcl/common/vio_0.tcl
++++ b/fpga_diff/vivado/tcl/common/vio_0.tcl
+@@ -68,7 +68,14 @@ set_property -dict {
+   CONFIG.C_PROBE_OUT0_INIT_VAL {0x1}
+   CONFIG.C_NUM_PROBE_OUT {3}
+   CONFIG.C_EN_PROBE_IN_ACTIVITY {0}
+-  CONFIG.C_NUM_PROBE_IN {0}
++  CONFIG.C_NUM_PROBE_IN {7}
++  CONFIG.C_PROBE_IN0_WIDTH {32}
++  CONFIG.C_PROBE_IN1_WIDTH {32}
++  CONFIG.C_PROBE_IN2_WIDTH {32}
++  CONFIG.C_PROBE_IN3_WIDTH {36}
++  CONFIG.C_PROBE_IN4_WIDTH {31}
++  CONFIG.C_PROBE_IN5_WIDTH {16}
++  CONFIG.C_PROBE_IN6_WIDTH {16}
+ } [get_ips vio_0]
+ 
+ set_property -dict { 
+-- 
+2.43.0
+

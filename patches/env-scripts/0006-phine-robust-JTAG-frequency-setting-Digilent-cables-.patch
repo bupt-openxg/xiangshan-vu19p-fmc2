@@ -1,0 +1,98 @@
+From b32acaac1b4778fa09114b3e1b2bedc81029ff60 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Wed, 14 Oct 2026 14:27:52 +0800
+Subject: [PATCH 06/12] phine: robust JTAG frequency setting (Digilent cables
+ reject hardcoded 12MHz)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+[Labtoolstcl 44-49] Value [12000000] is not valid for hw_target property
+[PARAM.FREQUENCY] on Digilent adapters — their valid frequency list is a
+discrete set. Probe common legal values in order, fall back to the
+default frequency with a warning (functionality unaffected, only
+JTAG-to-AXI throughput). Patched: write_bitstream.tcl, jtag_write_ddr.tcl,
+jtag_write_flash.tcl; docs/onboard-runbook.md inline script synced.
+---
+ fpga_diff/vivado/scripts/jtag_write_ddr.tcl   | 14 +++++++++++++-
+ fpga_diff/vivado/scripts/jtag_write_flash.tcl | 13 ++++++++++++-
+ fpga_diff/vivado/scripts/write_bitstream.tcl  | 14 +++++++++++++-
+ 3 files changed, 38 insertions(+), 3 deletions(-)
+
+diff --git a/fpga_diff/vivado/scripts/jtag_write_ddr.tcl b/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
+index 74a3472..5abde9a 100644
+--- a/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
++++ b/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
+@@ -25,7 +25,19 @@ if {[catch {open_hw_target} errmsg]} {
+     puts "Opened hardware target"
+ }
+ 
+-set_property PARAM.FREQUENCY 12000000 [current_hw_target]
++# JTAG 频率: Digilent 等线缆仅支持离散频率列表, 硬编码 12MHz 会报 [Labtoolstcl 44-49]。
++# 依次试探常用合法值, 全部失败则沿用默认频率继续 (不影响功能, 仅影响写 DDR 吞吐)。
++set _jtag_freq_ok 0
++foreach _f {12000000 15000000 10000000 8000000 6000000 4000000 3000000 2000000 1000000} {
++    if {![catch {set_property PARAM.FREQUENCY $_f [current_hw_target]}]} {
++        puts "INFO: JTAG frequency = $_f Hz"
++        set _jtag_freq_ok 1
++        break
++    }
++}
++if {!$_jtag_freq_ok} {
++    puts "WARNING: 线缆不支持试探列表中的频率, 继续使用默认 [get_property PARAM.FREQUENCY [current_hw_target]] Hz"
++}
+ 
+ # Get JTAG device handle
+ set hw_device [lindex [get_hw_devices] 0]
+diff --git a/fpga_diff/vivado/scripts/jtag_write_flash.tcl b/fpga_diff/vivado/scripts/jtag_write_flash.tcl
+index 09335ec..3018835 100644
+--- a/fpga_diff/vivado/scripts/jtag_write_flash.tcl
++++ b/fpga_diff/vivado/scripts/jtag_write_flash.tcl
+@@ -51,7 +51,18 @@ proc open_target {} {
+     exit 1
+   }
+ 
+-  set_property PARAM.FREQUENCY 12000000 [current_hw_target]
++  # JTAG 频率: 试探常用合法值 (Digilent 等线缆仅支持离散列表), 失败则用默认
++  set _jtag_freq_ok 0
++  foreach _f {12000000 15000000 10000000 8000000 6000000 4000000 3000000 2000000 1000000} {
++    if {![catch {set_property PARAM.FREQUENCY $_f [current_hw_target]}]} {
++      puts "INFO: JTAG frequency = $_f Hz"
++      set _jtag_freq_ok 1
++      break
++    }
++  }
++  if {!$_jtag_freq_ok} {
++    puts "WARNING: 线缆不支持试探列表中的频率, 继续使用默认 [get_property PARAM.FREQUENCY [current_hw_target]] Hz"
++  }
+ 
+   set hw_device [lindex [get_hw_devices] 0]
+   if {$hw_device eq ""} {
+diff --git a/fpga_diff/vivado/scripts/write_bitstream.tcl b/fpga_diff/vivado/scripts/write_bitstream.tcl
+index 170f0d9..61115b7 100644
+--- a/fpga_diff/vivado/scripts/write_bitstream.tcl
++++ b/fpga_diff/vivado/scripts/write_bitstream.tcl
+@@ -26,7 +26,19 @@ open_hw_manager
+ connect_hw_server
+ open_hw_target
+ 
+-set_property PARAM.FREQUENCY 12000000 [current_hw_target]
++# JTAG 频率: Digilent 等线缆仅支持离散频率列表, 硬编码 12MHz 会报 [Labtoolstcl 44-49]。
++# 依次试探常用合法值, 全部失败则沿用默认频率继续 (不影响功能, 仅影响 JTAG-to-AXI 吞吐)。
++set _jtag_freq_ok 0
++foreach _f {12000000 15000000 10000000 8000000 6000000 4000000 3000000 2000000 1000000} {
++    if {![catch {set_property PARAM.FREQUENCY $_f [current_hw_target]}]} {
++        puts "INFO: JTAG frequency = $_f Hz"
++        set _jtag_freq_ok 1
++        break
++    }
++}
++if {!$_jtag_freq_ok} {
++    puts "WARNING: 线缆不支持试探列表中的频率, 继续使用默认 [get_property PARAM.FREQUENCY [current_hw_target]] Hz"
++}
+ 
+ current_hw_device [get_hw_devices *]
+ refresh_hw_device [current_hw_device]
+-- 
+2.43.0
+

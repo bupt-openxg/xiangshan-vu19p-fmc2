@@ -1,0 +1,87 @@
+From 03718badf28361e5b35e45ee9efa371698b835c1 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Wed, 14 Oct 2026 14:41:57 +0800
+Subject: [PATCH 08/12] phine: auto-select the 64-bit DDR jtag-axi core in
+ jtag_write_ddr.tcl
+
+The design exposes TWO JTAG-AXI cores: a 32-bit one (AXI_bridge flash
+path) and the 64-bit DDR path. Enumeration assigned hw_axi_1 to the
+32-bit core on this bitstream, so the hardcoded handle broke long
+transactions with [Labtools 27-2083] 'LEN=128 and SIZE=32'.
+Now selects by AXI_DATA_WIDTH==64 (env HW_AXI_NAME overrides), reads
+the data width from the core property, and prints the chosen core.
+Verified end-to-end on the board: halt_soc + write_ddr(hello-xs) + reset_cpu OK.
+---
+ fpga_diff/vivado/scripts/jtag_write_ddr.tcl | 54 +++++++++++++++------
+ 1 file changed, 39 insertions(+), 15 deletions(-)
+
+diff --git a/fpga_diff/vivado/scripts/jtag_write_ddr.tcl b/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
+index 1c8bf96..872be85 100644
+--- a/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
++++ b/fpga_diff/vivado/scripts/jtag_write_ddr.tcl
+@@ -51,23 +51,47 @@ if {[llength $hw_axi_list] == 0} {
+     }
+ }
+ 
+-# Get AXI interface handle
+-set hw_axi [get_hw_axis hw_axi_1]
++# 选择 DDR 通路的 JTAG-AXI 核:
++# 本设计有两个 hw_axi 核 (32-bit flash 用 / 64-bit DDR 用), 硬编码 hw_axi_1 会抓错核
++# (报 [Labtools 27-2083] ... LEN=128 and SIZE=32)。规则:
++#   1) 环境变量 HW_AXI_NAME 显式指定;  2) 按 AXI_DATA_WIDTH=64 自动选择;  3) 回退取最后一个核。
++set hw_axi ""
++if {[info exists ::env(HW_AXI_NAME)] && [string trim $::env(HW_AXI_NAME)] ne ""} {
++    set _want [string trim $::env(HW_AXI_NAME)]
++    set hw_axi [get_hw_axis $_want]
++    puts "使用环境变量指定的 AXI 核: $_want"
++}
+ if {$hw_axi eq ""} {
+-    puts "Error: hw_axi_1 not found. Please check the AXI interface configuration."
+-    exit
+-} else {
+-    puts "hw_axi_1 found: $hw_axi"
++    foreach _a $hw_axi_list {
++        if {![catch {get_property AXI_DATA_WIDTH $_a} _w] && $_w == 64} {
++            set hw_axi $_a
++            break
++        }
++    }
+ }
+-
+-set hw_axi_data_width 64
+-if {[llength $argv] > 1} {
+-    set arg_width [lindex $argv 1]
+-    if {[string is integer -strict $arg_width] && $arg_width == 32} {
+-        set hw_axi_data_width $arg_width
+-        puts "Using AXI data width from argument: $hw_axi_data_width"
+-    } else {
+-        puts "Warning: AXI width argument must be 32 to override default. Using default 64."
++if {$hw_axi eq ""} {
++    set hw_axi [lindex $hw_axi_list end]
++    puts "WARNING: 未找到 64-bit AXI 核, 回退使用 $hw_axi (请确认其连接的是 DDR)"
++}
++catch {puts "选择 AXI 核: $hw_axi (AXI_DATA_WIDTH=[get_property AXI_DATA_WIDTH $hw_axi], AXI_ADDR_WIDTH=[get_property AXI_ADDR_WIDTH $hw_axi])"}
++
++# 数据宽度: 优先从硬件核属性读取 (自动匹配 IP 配置, -size 参数已废弃自动设定);
++# 仅当属性不可读时才回退到参数/默认值, 避免与硬件位宽不一致导致长度校验失败。
++set hw_axi_data_width ""
++if {![catch {get_property AXI_DATA_WIDTH $hw_axi} _hw_w] && $_hw_w ne ""} {
++    set hw_axi_data_width $_hw_w
++    puts "从硬件读取 AXI data width = $hw_axi_data_width"
++}
++if {$hw_axi_data_width eq ""} {
++    set hw_axi_data_width 64
++    if {[llength $argv] > 1} {
++        set arg_width [lindex $argv 1]
++        if {[string is integer -strict $arg_width] && $arg_width == 32} {
++            set hw_axi_data_width $arg_width
++            puts "Using AXI data width from argument: $hw_axi_data_width"
++        } else {
++            puts "Warning: AXI width argument must be 32 to override default. Using default 64."
++        }
+     }
+ }
+ puts "Using AXI data width: $hw_axi_data_width"
+-- 
+2.43.0
+

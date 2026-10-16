@@ -1,0 +1,79 @@
+From 6ba4f2d991c7e245185b2ce5b21311d4a83667c1 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Mon, 12 Oct 2026 16:14:37 +0800
+Subject: [PATCH 03/12] phine: fix fpga.xdc trailing comments (Tcl parses #
+ midline as argument, constraints were dropped)
+
+---
+ fpga_diff/vivado/constr/common/fpga.xdc | 28 +++++++++++++++----------
+ 1 file changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index a28d9d4..1bf2ef8 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -7,6 +7,7 @@
+ #   clk5  25MHz <- AEConsole PLL GC04 (BA51/BB51)  CPU 系统时钟
+ #   clk7  80MHz <- AEConsole PLL GC02 (BM44/BN44)  DDR 参考时钟
+ #   clk8   1MHz <- AEConsole PLL GC06 (E57/E58)    RTC
++# 注意: XDC 中行尾注释会被 Tcl 当作参数解析, 本文件注释一律独占整行!
+ ####################################################################################
+ 
+ ####### 时钟 (差分)
+@@ -29,21 +30,22 @@ set_property PACKAGE_PIN BG17 [get_ports rstn_sw5]
+ # PHINE 无第三个按键: rstn_sw4 (DDR复位) 挂 GPIO_6 上拉, 日常由 VIO sw4 控制
+ set_property PACKAGE_PIN W16 [get_ports rstn_sw4]
+ 
+-####### UART0 -> 后面板 RJ45 用户串口
++####### UART0 接后面板 RJ45 用户串口
+ set_property PACKAGE_PIN BG14 [get_ports uart0_sout]
+ set_property PACKAGE_PIN BH14 [get_ports uart0_sin]
+-# uart1/uart2 备用 -> GPIO 排针 CN43 (GPIO_10/11/12/13)
++# uart1/uart2 备用, 引至 GPIO 排针 CN43 (GPIO_10/11/12/13)
+ set_property PACKAGE_PIN Y14 [get_ports uart1_sout]
+ set_property PACKAGE_PIN U14 [get_ports uart1_sin]
+ set_property PACKAGE_PIN V13 [get_ports uart2_sout]
+ set_property PACKAGE_PIN V15 [get_ports uart2_sin]
+ 
+ ####### LED 状态
+-set_property PACKAGE_PIN AA16 [get_ports led0]     # cpu_wr_ddr_valid
+-set_property PACKAGE_PIN AA14 [get_ports led2]     # cpu_rd_qspi_valid
+-set_property PACKAGE_PIN AB13 [get_ports led3]     # init_calib_complete
++# led0=cpu_wr_ddr_valid, led2=cpu_rd_qspi_valid, led3=init_calib_complete
++set_property PACKAGE_PIN AA16 [get_ports led0]
++set_property PACKAGE_PIN AA14 [get_ports led2]
++set_property PACKAGE_PIN AB13 [get_ports led3]
+ 
+-####### RISC-V 调试 JTAG -> GPIO 排针 CN43 (GPIO_1..5), 接 J-Link/FT2232 供 OpenOCD 用
++####### RISC-V 调试 JTAG 引至 GPIO 排针 CN43 (GPIO_1..5), 接 J-Link/FT2232 供 OpenOCD 用
+ set_property PACKAGE_PIN W13 [get_ports JTAG_TCK]
+ set_property PACKAGE_PIN V14 [get_ports JTAG_TMS]
+ set_property PACKAGE_PIN U13 [get_ports JTAG_TDI]
+@@ -96,10 +98,14 @@ set_property PULLUP true [get_ports JTAG_TRSTn]
+ ####################################################################################
+ # 时钟定义与时钟组
+ ####################################################################################
+-create_clock -period 5.000 -name CPU_CLK_IN [get_ports clk6_p]        # 200MHz OSC -> cqetmclk/CRG
+-create_clock -period 1000.000 -name TMCLK [get_ports clk8_p]          # 1MHz RTC
+-create_clock -period 40.000 -name DEBUG_CLK_IN [get_ports clk5_p]     # 25MHz CPU 系统时钟
+-create_clock -period 83.333 -name jtag_vclk [get_ports JTAG_TCK]      # ~12MHz 调试 TCK
++# CPU_CLK_IN: 板载 200MHz OSC -> cqetmclk/CRG
++create_clock -period 5.000 -name CPU_CLK_IN [get_ports clk6_p]
++# TMCLK: 1MHz RTC
++create_clock -period 1000.000 -name TMCLK [get_ports clk8_p]
++# DEBUG_CLK_IN: 25MHz CPU 系统时钟
++create_clock -period 40.000 -name DEBUG_CLK_IN [get_ports clk5_p]
++# jtag_vclk: ~12MHz 调试 TCK
++create_clock -period 83.333 -name jtag_vclk [get_ports JTAG_TCK]
+ 
+ set_clock_groups -asynchronous -group [get_clocks jtag_vclk -include_generated_clocks]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks CPU_CLK_IN] -group [get_clocks -include_generated_clocks TMCLK]
+@@ -111,4 +117,4 @@ set_clock_groups -asynchronous -group [get_clocks [list clk7_p mmcm_clkout0 mmcm
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks CPU_CLK_IN]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks TMCLK]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks DEBUG_CLK_IN]
+-set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks [list clk7_p mmcm_clkout0 mmcm_clkout1 mmcm_clkout2 mmcm_clkout3 mmcm_clkout4 mmcm_clkout5 mmcm_clkout6 {pll_clk[0]} {pll_clk[1]} {pll_clk[2]} {pll_clk[0]_DIV} {pll_clk[2]_DIV} {pll_clk[1]_DIV}]]
++set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks [list clk7_p mmcm_clkout0 mmcm_clkout1 mmcm_clkout2 mmcm_clkout3 mmcm_clkout4 mmcm_clkout5 mmcm_clkout6 {pll_clk[0]} {pll_clk[1]} {pll_clk[2]} {pll_clk[0]_DIV} {pll_clk[2]_DIV} {pll_clk[1]_DIV}]]
+-- 
+2.43.0
+

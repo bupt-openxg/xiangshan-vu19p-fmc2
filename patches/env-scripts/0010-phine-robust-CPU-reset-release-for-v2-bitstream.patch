@@ -1,0 +1,58 @@
+From 833b718fc2536a909b45190a1450f662d7cdadb2 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Wed, 14 Oct 2026 15:09:03 +0800
+Subject: [PATCH 10/12] phine: robust CPU reset release for v2 bitstream
+
+On the real board the CPU never started: cpu_rstn is only set by the
+button-debounce rflag (needs physical-pin edges on BG17) and neither
+VIO-only sequences nor physical presses released it (hardware evidence:
+ROM/DDR JTAG accesses work, magic-marker probe in DDR never written).
+
+- fpga.xdc: PULLUP on rstn_sw5/rstn_sw6 (avoid floating inputs)
+- fpga_top_debug.sv: cpu_rstn also releases on a VIO sw5 rising edge
+  (bypasses the physical button path; reset_cpu.tcl sequence now
+  guaranteed to work in software alone)
+- rebuilt bitstream picks up the fixed bootrom coe (no runtime patch)
+---
+ fpga_diff/src/rtl/common/fpga_top_debug.sv | 8 +++++++-
+ fpga_diff/vivado/constr/common/fpga.xdc    | 2 ++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/fpga_diff/src/rtl/common/fpga_top_debug.sv b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+index ffa3548..fbec88a 100755
+--- a/fpga_diff/src/rtl/common/fpga_top_debug.sv
++++ b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+@@ -134,10 +134,16 @@ button_debounce u_cpu_rstn(
+    .button_rflag    (cpu_setn_rflag)
+ );
+ 
++reg vio_sw5_d;
++always@(posedge sys_clk_i)
++   vio_sw5_d <= vio_sw5;
++
+ always@(posedge sys_clk_i) begin
+    if ((sys_rstn == 1'b0)||(vio_sw6 == 1'b0))
+       cpu_rstn <= 1'b0;
+-   else if (cpu_setn_rflag)
++   // 释放路径: 物理按键消抖脉冲, 或 VIO sw5 上升沿直通
++   // (PHINE 板按键/引脚路径在实机上不可靠, 直通路径保证 reset_cpu 脚本必然生效)
++   else if (cpu_setn_rflag || (vio_sw5 && !vio_sw5_d))
+       cpu_rstn <= 1'b1;
+    else
+       cpu_rstn <= cpu_rstn;
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index 7294c5b..26e2d46 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -84,6 +84,8 @@ set_property DIFF_TERM_ADV {} [get_ports clk7_n]
+ set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw6]
+ set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw5]
+ set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw4]
++set_property PULLUP true [get_ports rstn_sw6]
++set_property PULLUP true [get_ports rstn_sw5]
+ set_property PULLUP true [get_ports rstn_sw4]
+ 
+ set_property IOSTANDARD LVCMOS33 [get_ports uart0_sout]
+-- 
+2.43.0
+

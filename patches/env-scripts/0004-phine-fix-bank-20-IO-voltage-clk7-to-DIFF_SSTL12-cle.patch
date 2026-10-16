@@ -1,0 +1,53 @@
+From 6cf5ad4d0caf18666a969086ce6ec5d30abaf1f6 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Mon, 12 Oct 2026 23:24:19 +0800
+Subject: [PATCH 04/12] =?UTF-8?q?phine:=20fix=20bank-20=20IO=20voltage=20?=
+ =?UTF-8?q?=E2=80=94=20clk7=20to=20DIFF=5FSSTL12,=20clear=20stale=20DIFF?=
+ =?UTF-8?q?=5FTERM=5FADV?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- clk7 (DDR refclk, HP20_GC02/BM44/BN44) shares bank 20 with DDR4 POD12 pins
+  (VCCO must be 1.2V) -> LVDS (needs 1.8V) violates DRC BIVC-1
+- DIFF_SSTL12 is the 1.2V-compatible differential standard (PHINE HP20_GC02 scheme)
+- synth DCP bakes old DIFF_TERM_ADV=TERM_100 -> clear via empty-value set_property
+  (reset_property is not supported in xdc files); fixes DRC PORTPROP-6
+---
+ fpga_diff/vivado/constr/common/fpga.xdc | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index 1bf2ef8..5054481 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -59,8 +59,10 @@ set_property IOSTANDARD LVDS [get_ports clk5_p]
+ set_property IOSTANDARD LVDS [get_ports clk5_n]
+ set_property IOSTANDARD LVDS [get_ports clk6_p]
+ set_property IOSTANDARD LVDS [get_ports clk6_n]
+-set_property IOSTANDARD LVDS [get_ports clk7_p]
+-set_property IOSTANDARD LVDS [get_ports clk7_n]
++# clk7 (DDR 参考 80MHz) 位于 bank 20, 该 bank 因 DDR4 POD12 引脚必须 VCCO=1.2V,
++# LVDS 需要 1.8V → 使用 1.2V 兼容的 DIFF_SSTL12 (PHINE 手册 HP20_GC02 方案的等价电气标准)
++set_property IOSTANDARD DIFF_SSTL12 [get_ports clk7_p]
++set_property IOSTANDARD DIFF_SSTL12 [get_ports clk7_n]
+ set_property IOSTANDARD LVDS [get_ports clk8_p]
+ set_property IOSTANDARD LVDS [get_ports clk8_n]
+ set_property DIFF_TERM TRUE [get_ports clk5_p]
+@@ -68,9 +70,12 @@ set_property DIFF_TERM_ADV TERM_100 [get_ports clk5_p]
+ set_property DIFF_TERM TRUE [get_ports clk6_p]
+ set_property DIFF_TERM_ADV TERM_100 [get_ports clk6_p]
+ set_property DIFF_TERM TRUE [get_ports clk7_p]
+-set_property DIFF_TERM_ADV TERM_100 [get_ports clk7_p]
+ set_property DIFF_TERM TRUE [get_ports clk8_p]
+ set_property DIFF_TERM_ADV TERM_100 [get_ports clk8_p]
++# clk7 使用 DIFF_SSTL12: 不支持 DIFF_TERM_ADV; 用空值清除综合 DCP 中残留的旧属性
++# (reset_property 不支持在 xdc 文件中使用)
++set_property DIFF_TERM_ADV {} [get_ports clk7_p]
++set_property DIFF_TERM_ADV {} [get_ports clk7_n]
+ 
+ set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw6]
+ set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw5]
+-- 
+2.43.0
+

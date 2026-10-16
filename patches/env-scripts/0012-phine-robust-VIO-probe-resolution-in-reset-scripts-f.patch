@@ -1,0 +1,264 @@
+From 6d554eb0737c2173d7f91b217649b137d375b042 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Fri, 16 Oct 2026 16:48:22 +0800
+Subject: [PATCH 12/12] phine: robust VIO probe resolution in reset scripts
+ (fix Labtoolstcl 44-152)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+现象: make halt_soc / reset_cpu 报
+  ERROR: [Labtoolstcl 44-152] hw_probe '<const0>' does not have property 'OUTPUT_VALUE'
+根因: Vivado get_hw_probes <模式> 在探针刚被 set_property 修改(值确实变化)后会回退
+      返回该 VIO 的全部探针(列表以 <const0> 常量探针开头), commit_hw_vio 拿到混合
+      列表即在首个 <const0> 上报错中止; 若写入值恰好未变化则不触发(故时好时坏)。
+修复: 三个脚本改为 "先按精确名解析输出探针对象(校验其具备 OUTPUT_VALUE 属性),
+      之后全程复用同一对象", 修改后不再做模式查询; 打印 resolved: ... 便于核对;
+      保留 sw4 输出被内联为 ddr_rstn_to_core 的兼容回退。
+
+上板实测: 值变化复现场景下 halt_soc/reset_cpu 均正常, halt -> write_ddr(13.3MB)
+-> reset_cpu -> Linux 启动至 shell 全流程通过。
+---
+ fpga_diff/vivado/scripts/halt_soc.tcl  | 41 +++++++++++--
+ fpga_diff/vivado/scripts/reset_cpu.tcl | 81 +++++++++++++++++---------
+ fpga_diff/vivado/scripts/reset_ddr.tcl | 47 +++++++++++----
+ 3 files changed, 125 insertions(+), 44 deletions(-)
+
+diff --git a/fpga_diff/vivado/scripts/halt_soc.tcl b/fpga_diff/vivado/scripts/halt_soc.tcl
+index f351cd4..f6626c6 100644
+--- a/fpga_diff/vivado/scripts/halt_soc.tcl
++++ b/fpga_diff/vivado/scripts/halt_soc.tcl
+@@ -1,3 +1,5 @@
++# 暂停 CPU: VIO sw6=0  (纯 TCL/VIO 控制, 不使用板卡按键)
++# 用法: vivado -mode tcl -source halt_soc.tcl -tclargs <fpga_top_debug.ltx>
+ puts "probe .ltx path:"
+ puts [lindex $argv 0]
+ set file_name [lindex $argv 0]
+@@ -7,6 +9,31 @@ if {![file exists $file_name]} {
+     exit 1
+ }
+ 
++# ---- 探针解析助手 ----------------------------------------------------------
++# 按精确名解析出"输出探针"对象; 解析一次后全程复用同一对象。
++# 必须在 set_property/commit 之前解析完毕: Vivado 在探针被修改后再用模式
++# 查询会回退返回该 VIO 的全部探针(含 <const0> 常量探针), 导致
++# commit_hw_vio 报 [Labtoolstcl 44-152] 错误。
++proc vio_probe_out {vio name} {
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name && ![catch {get_property OUTPUT_VALUE $p}]} {
++            return $p
++        }
++    }
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name} { return $p }
++    }
++    return ""
++}
++proc vio_wr {vio name value} {
++    set p [vio_probe_out $vio $name]
++    if {$p eq ""} { puts "ERROR: 未找到 VIO 输出探针 '$name'"; exit 1 }
++    set_property OUTPUT_VALUE $value $p
++    commit_hw_vio $p
++    puts "  $name = $value"
++}
++# ---------------------------------------------------------------------------
++
+ open_hw_manager
+ connect_hw_server
+ open_hw_target
+@@ -16,12 +43,14 @@ current_hw_device [get_hw_devices *]
+ # load .ltx file
+ set_property PROBES.FILE $file_name [current_hw_device]
+ 
+-refresh_hw_device [current_hw_device]
++refresh_hw_device -update_hw_probes true [current_hw_device]
+ refresh_hw_vio hw_vio_1
+ 
+-puts [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]
+-# vio_sw6 0
+-set_property OUTPUT_VALUE 0 [get_hw_probes vio_sw6 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw6} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
++set vio [get_hw_vios hw_vio_1]
++puts "probes: [get_hw_probes -of_objects $vio]"
++
++# 暂停 CPU: sw6=0
++vio_wr $vio vio_sw6 0
++refresh_hw_vio $vio
++puts "halt_soc 完成 (vio_sw6=0)"
+ exit
+diff --git a/fpga_diff/vivado/scripts/reset_cpu.tcl b/fpga_diff/vivado/scripts/reset_cpu.tcl
+index 6bfadd3..d482ac6 100644
+--- a/fpga_diff/vivado/scripts/reset_cpu.tcl
++++ b/fpga_diff/vivado/scripts/reset_cpu.tcl
+@@ -1,3 +1,6 @@
++# 复位并释放 CPU（纯 TCL/VIO 控制, 不使用板卡按键）
++#   序列: sw4=1 (释放 DDR 复位) -> sw5=0 -> sw6=0 -> sw6=1 -> sw5=1(上升沿释放 cpu_rstn)
++# 用法: vivado -mode tcl -source reset_cpu.tcl -tclargs <fpga_top_debug.ltx>
+ puts "probe .ltx path:"
+ puts [lindex $argv 0]
+ set file_name [lindex $argv 0]
+@@ -7,6 +10,31 @@ if {![file exists $file_name]} {
+     exit 1
+ }
+ 
++# ---- 探针解析助手 ----------------------------------------------------------
++# 按精确名解析出"输出探针"对象; 解析一次后全程复用同一对象。
++# 必须在 set_property/commit 之前解析完毕: Vivado 在探针被修改后再用模式
++# 查询会回退返回该 VIO 的全部探针(含 <const0> 常量探针), 导致
++# commit_hw_vio 报 [Labtoolstcl 44-152] 错误。
++proc vio_probe_out {vio name} {
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name && ![catch {get_property OUTPUT_VALUE $p}]} {
++            return $p
++        }
++    }
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name} { return $p }
++    }
++    return ""
++}
++proc vio_wr {vio name value} {
++    set p [vio_probe_out $vio $name]
++    if {$p eq ""} { puts "ERROR: 未找到 VIO 输出探针 '$name'"; exit 1 }
++    set_property OUTPUT_VALUE $value $p
++    commit_hw_vio $p
++    puts "  $name = $value"
++}
++# ---------------------------------------------------------------------------
++
+ open_hw_manager
+ connect_hw_server
+ open_hw_target
+@@ -16,32 +44,31 @@ current_hw_device [get_hw_devices *]
+ # load .ltx file
+ set_property PROBES.FILE $file_name [current_hw_device]
+ 
+-refresh_hw_device [current_hw_device]
++refresh_hw_device -update_hw_probes true [current_hw_device]
+ refresh_hw_vio hw_vio_1
+ 
+-puts [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]
+-# vio_sw4 1
+-set_property OUTPUT_VALUE 1 [get_hw_probes vio_sw4 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw4} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-after 500
+-# vio_sw5 0
+-set_property OUTPUT_VALUE 0 [get_hw_probes vio_sw5 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw5} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-after 500
+-# vio_sw6 0
+-set_property OUTPUT_VALUE 0 [get_hw_probes vio_sw6 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw6} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-after 500
+-# vio_sw6 1
+-set_property OUTPUT_VALUE 1 [get_hw_probes vio_sw6 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw6} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-after 500
+-# vio_sw5 1
+-set_property OUTPUT_VALUE 1 [get_hw_probes vio_sw5 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw5} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE  [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-exit
+\ No newline at end of file
++set vio [get_hw_vios hw_vio_1]
++puts "probes: [get_hw_probes -of_objects $vio]"
++
++# 解析全部输出探针（先解析、后修改）
++set p_sw5 [vio_probe_out $vio vio_sw5]
++set p_sw6 [vio_probe_out $vio vio_sw6]
++set p_sw4 [vio_probe_out $vio vio_sw4]
++if {$p_sw4 eq ""} { set p_sw4 [vio_probe_out $vio ddr_rstn_to_core] }
++if {$p_sw5 eq "" || $p_sw6 eq "" || $p_sw4 eq ""} {
++    puts "ERROR: VIO 输出探针解析失败 (sw4=$p_sw4 sw5=$p_sw5 sw6=$p_sw6)"
++    exit 1
++}
++puts "resolved: sw4=$p_sw4 sw5=$p_sw5 sw6=$p_sw6"
++
++proc wr {p v} { set_property OUTPUT_VALUE $v $p; commit_hw_vio $p; after 300 }
++
++# sw4 1 (释放 DDR 复位)
++wr $p_sw4 1
++# sw5 0 -> sw6 0 -> sw6 1 -> sw5 1(上升沿释放 cpu_rstn)
++wr $p_sw5 0
++wr $p_sw6 0
++wr $p_sw6 1
++wr $p_sw5 1
++puts "reset_cpu 完成 (sw4=1, sw5=1, sw6=1)"
++exit
+diff --git a/fpga_diff/vivado/scripts/reset_ddr.tcl b/fpga_diff/vivado/scripts/reset_ddr.tcl
+index 57957c1..38ae28e 100644
+--- a/fpga_diff/vivado/scripts/reset_ddr.tcl
++++ b/fpga_diff/vivado/scripts/reset_ddr.tcl
+@@ -1,3 +1,5 @@
++# DDR 复位脉冲: VIO sw4 0->1  (纯 TCL/VIO 控制, 不使用板卡按键)
++# 用法: vivado -mode tcl -source reset_ddr.tcl -tclargs <fpga_top_debug.ltx>
+ puts "probe .ltx path:"
+ puts [lindex $argv 0]
+ set file_name [lindex $argv 0]
+@@ -7,6 +9,24 @@ if {![file exists $file_name]} {
+     exit 1
+ }
+ 
++# ---- 探针解析助手 ----------------------------------------------------------
++# 按精确名解析出"输出探针"对象; 解析一次后全程复用同一对象。
++# 必须在 set_property/commit 之前解析完毕: Vivado 在探针被修改后再用模式
++# 查询会回退返回该 VIO 的全部探针(含 <const0> 常量探针), 导致
++# commit_hw_vio 报 [Labtoolstcl 44-152] 错误。
++proc vio_probe_out {vio name} {
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name && ![catch {get_property OUTPUT_VALUE $p}]} {
++            return $p
++        }
++    }
++    foreach p [get_hw_probes -of_objects $vio] {
++        if {[get_property NAME $p] eq $name} { return $p }
++    }
++    return ""
++}
++# ---------------------------------------------------------------------------
++
+ open_hw_manager
+ connect_hw_server
+ open_hw_target
+@@ -16,17 +36,22 @@ current_hw_device [get_hw_devices *]
+ # load .ltx file
+ set_property PROBES.FILE $file_name [current_hw_device]
+ 
+-refresh_hw_device [current_hw_device]
++refresh_hw_device -update_hw_probes true [current_hw_device]
+ refresh_hw_vio hw_vio_1
+ 
+-puts [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]
+-# vio_sw4 0
+-set_property OUTPUT_VALUE 0 [get_hw_probes vio_sw4 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw4} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
+-after 500
+-# vio_sw4 1
+-set_property OUTPUT_VALUE 1 [get_hw_probes vio_sw4 -of_objects [get_hw_vios hw_vio_1]]
+-commit_hw_vio [get_hw_probes {vio_sw4} -of_objects [get_hw_vios hw_vio_1]]
+-puts [get_property OUTPUT_VALUE [get_hw_probes -of_objects [get_hw_vios hw_vio_1]]]
++set vio [get_hw_vios hw_vio_1]
++puts "probes: [get_hw_probes -of_objects $vio]"
++
++# sw4 输出探针名解析 (v2: vio_sw4, v3 中被内联: ddr_rstn_to_core)
++set sw4 [vio_probe_out $vio vio_sw4]
++if {$sw4 eq ""} { set sw4 [vio_probe_out $vio ddr_rstn_to_core] }
++if {$sw4 eq ""} { puts "ERROR: 未找到 sw4 输出探针"; exit 1 }
++puts "sw4 probe: $sw4"
++
++set_property OUTPUT_VALUE 0 $sw4
++commit_hw_vio $sw4
++after 300
++set_property OUTPUT_VALUE 1 $sw4
++commit_hw_vio $sw4
++puts "reset_ddr 完成 (sw4: 0 -> 1)"
+ exit
+-- 
+2.43.0
+

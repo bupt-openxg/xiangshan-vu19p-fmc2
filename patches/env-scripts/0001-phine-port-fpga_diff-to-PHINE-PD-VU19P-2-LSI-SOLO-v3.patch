@@ -1,0 +1,1081 @@
+From 2c80ae6bfa572f6fb49fbb274c121851678f9061 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Mon, 12 Oct 2026 15:25:02 +0800
+Subject: [PATCH 01/12] phine: port fpga_diff to PHINE PD-VU19P-2-LSI SOLO v3
+
+- part: xcvu19p-fsva3824-2-e -> xcvu19p-fsva3824-1-e (11 files)
+- fpga.xdc: rewrite for PHINE pins (UART BG14/BH14, 200M OSC BW37/BY37,
+  PLL GC02/04/06 clocks, PUSHSW1/2, LEDs, RISC-V JTAG on GPIO header)
+- ddr.xdc: regenerate for FMC2 + UV-FMCH-PDDR4DME from UG+xls pinmap
+- fpga_top_debug.sv: drop SD ports, tie off to no-card state
+---
+ fpga_diff/src/rtl/common/fpga_top_debug.sv    |  33 +-
+ fpga_diff/src/tcl/common/AXI_bridge.tcl       |   2 +-
+ fpga_diff/src/tcl/common/blk_mem_gen_0.tcl    |   2 +-
+ fpga_diff/src/tcl/common/data_bridge.tcl      |   2 +-
+ fpga_diff/src/tcl/common/xdma_ep.tcl          |   2 +-
+ .../uvhs/compilation/export_vivado_ip.tcl     |   2 +-
+ fpga_diff/vivado/constr/common/ddr.xdc        | 272 +++++-----
+ fpga_diff/vivado/constr/common/fpga.xdc       | 480 ++++--------------
+ .../tcl/common/ahblite_axi_bridge_0.tcl       |   2 +-
+ .../vivado/tcl/common/jtag_ddr_subsys.tcl     |   2 +-
+ .../tcl/common/pcie4c_uscale_plus_0.tcl       |   2 +-
+ .../vivado/tcl/common/pcie_axi_axis_bd.tcl    |   2 +-
+ fpga_diff/vivado/tcl/common/vio_0.tcl         |   2 +-
+ fpga_diff/vivado/tcl/common/xs_uart.tcl       |  20 +-
+ 14 files changed, 231 insertions(+), 594 deletions(-)
+
+diff --git a/fpga_diff/src/rtl/common/fpga_top_debug.sv b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+index fc4509f..ffa3548 100755
+--- a/fpga_diff/src/rtl/common/fpga_top_debug.sv
++++ b/fpga_diff/src/rtl/common/fpga_top_debug.sv
+@@ -97,15 +97,7 @@ module fpga_top_debug
+    input                 JTAG_TMS,         // come from gpio
+    input                 JTAG_TDI,         // come from gpio
+    output                JTAG_TDO,         // come from gpio
+-   input                 JTAG_TRSTn,       // come from gpio
+-
+-   output                SD_CLK,
+-   inout                 SD_CMD,
+-   inout                 SD_DATA0,
+-   inout                 SD_DATA1,
+-   inout                 SD_DATA2,
+-   inout                 SD_DATA3,
+-   input                 SD_DECT
++   input                 JTAG_TRSTn        // come from gpio
+ );
+ 
+ wire vio_sw6;
+@@ -295,24 +287,11 @@ wire DDR0_ZQ = 'h0;
+ //assign qspi_mi1 = QSPI_DAT_1;
+ //assign qspi_mi0 = QSPI_DAT_0;
+ 
+-// sd-io
+-assign SD_CLK = sdmmc_cclk_card;
+-
+-assign sdmmc_sd_cmd_in = SD_CMD;
+-assign SD_CMD = sdmmc_sd_cmd_out_en ? sdmmc_sd_cmd_out : 1'bz; 
+-
+-assign sdmmc_sd_dat_in[0] = SD_DATA0;
+-assign sdmmc_sd_dat_in[1] = SD_DATA1;
+-assign sdmmc_sd_dat_in[2] = SD_DATA2;
+-assign sdmmc_sd_dat_in[3] = SD_DATA3;
+-
+-assign SD_DATA0 = sdmmc_sd_dat_out_en[0] ? sdmmc_sd_dat_out[0] : 1'bz;
+-assign SD_DATA1 = sdmmc_sd_dat_out_en[1] ? sdmmc_sd_dat_out[1] : 1'bz;
+-assign SD_DATA2 = sdmmc_sd_dat_out_en[2] ? sdmmc_sd_dat_out[2] : 1'bz;
+-assign SD_DATA3 = sdmmc_sd_dat_out_en[3] ? sdmmc_sd_dat_out[3] : 1'bz;
+-
+-assign sdmmc_card_detect_n = SD_DECT;
+-assign sdmmc_card_write_prot = 0;
++// sd-io: PHINE 板无 SD 槽 -> 置为"无卡"状态, sdmmc_* 输出留空由综合优化
++assign sdmmc_sd_cmd_in = 1'b1;
++assign sdmmc_sd_dat_in = 4'hf;
++assign sdmmc_card_detect_n = 1'b1;
++assign sdmmc_card_write_prot = 1'b0;
+ 
+ // gmac wiring
+ `ifdef XS_GMAC
+diff --git a/fpga_diff/src/tcl/common/AXI_bridge.tcl b/fpga_diff/src/tcl/common/AXI_bridge.tcl
+index f0f3721..5f2ae48 100644
+--- a/fpga_diff/src/tcl/common/AXI_bridge.tcl
++++ b/fpga_diff/src/tcl/common/AXI_bridge.tcl
+@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-   create_project project_1 myproj -part xcvu19p-fsva3824-2-e
++   create_project project_1 myproj -part xcvu19p-fsva3824-1-e
+ }
+ 
+ 
+diff --git a/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl b/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
+index ed12cde..ab68ed3 100755
+--- a/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
++++ b/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
+@@ -22,7 +22,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-  create_project xs_v3 xs_v3 -part xcvu19p-fsva3824-2-e
++  create_project xs_v3 xs_v3 -part xcvu19p-fsva3824-1-e
+   set_property target_language Verilog [current_project]
+   set_property simulator_language Mixed [current_project]
+ }
+diff --git a/fpga_diff/src/tcl/common/data_bridge.tcl b/fpga_diff/src/tcl/common/data_bridge.tcl
+index e3e5f89..c3bdc7e 100644
+--- a/fpga_diff/src/tcl/common/data_bridge.tcl
++++ b/fpga_diff/src/tcl/common/data_bridge.tcl
+@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-   create_project project_1 myproj -part xcvu19p-fsva3824-2-e
++   create_project project_1 myproj -part xcvu19p-fsva3824-1-e
+ }
+ 
+ 
+diff --git a/fpga_diff/src/tcl/common/xdma_ep.tcl b/fpga_diff/src/tcl/common/xdma_ep.tcl
+index d254ba7..023607a 100644
+--- a/fpga_diff/src/tcl/common/xdma_ep.tcl
++++ b/fpga_diff/src/tcl/common/xdma_ep.tcl
+@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-   create_project project_1 myproj -part xcvu19p-fsva3824-2-e
++   create_project project_1 myproj -part xcvu19p-fsva3824-1-e
+ }
+ 
+ 
+diff --git a/fpga_diff/uvhs/compilation/export_vivado_ip.tcl b/fpga_diff/uvhs/compilation/export_vivado_ip.tcl
+index b067c27..4e2619a 100644
+--- a/fpga_diff/uvhs/compilation/export_vivado_ip.tcl
++++ b/fpga_diff/uvhs/compilation/export_vivado_ip.tcl
+@@ -60,7 +60,7 @@ file mkdir $export_project_dir
+ if {[file exists $export_project]} {
+     open_project $export_project
+ } else {
+-    create_project vivado_ip_export $export_project_dir -part xcvu19p-fsva3824-2-e
++    create_project vivado_ip_export $export_project_dir -part xcvu19p-fsva3824-1-e
+     set_property target_language Verilog [current_project]
+     set_property simulator_language Mixed [current_project]
+ }
+diff --git a/fpga_diff/vivado/constr/common/ddr.xdc b/fpga_diff/vivado/constr/common/ddr.xdc
+index 3e63381..e1f5fab 100755
+--- a/fpga_diff/vivado/constr/common/ddr.xdc
++++ b/fpga_diff/vivado/constr/common/ddr.xdc
+@@ -1,152 +1,120 @@
+-#Pin LOC constraints for the status signals init_calib_complete and data_compare_error
+-
+-#LOC constraints provided if the pins are selected for status signals
+-
+-
+-
+-
+-
+-
+-
+-# Rank1 pins are in ddr_rank1.xdc and are added only when DDR_RANK_WIDTH=2.
+-
+-
+-####################################################################################
+-# Constraints from file : 'xpm_cdc_single.tcl'
+-####################################################################################
+-
+-
+-
+-
+-
+-
+-
+-
+-set_property PACKAGE_PIN V63 [get_ports {DDR0_DQ[36]}]
+-set_property PACKAGE_PIN V58 [get_ports {DDR0_DQ[37]}]
+-set_property PACKAGE_PIN W63 [get_ports {DDR0_DQ[34]}]
+-set_property PACKAGE_PIN W60 [get_ports {DDR0_DM[4]}]
+-set_property PACKAGE_PIN V59 [get_ports {DDR0_DQ[35]}]
+-set_property PACKAGE_PIN U63 [get_ports {DDR0_DQ[32]}]
+-set_property PACKAGE_PIN W62 [get_ports {DDR0_DQ[33]}]
+-set_property PACKAGE_PIN U61 [get_ports {DDR0_DQ[38]}]
+-set_property PACKAGE_PIN V60 [get_ports {DDR0_DQS_T[4]}]
+-set_property PACKAGE_PIN V61 [get_ports {DDR0_DQS_C[4]}]
+-set_property PACKAGE_PIN U62 [get_ports {DDR0_DQ[39]}]
+-set_property PACKAGE_PIN U56 [get_ports {DDR0_DM[3]}]
+-set_property PACKAGE_PIN P55 [get_ports {DDR0_DQ[26]}]
+-set_property PACKAGE_PIN T56 [get_ports {DDR0_DQ[28]}]
+-set_property PACKAGE_PIN P56 [get_ports {DDR0_DQ[29]}]
+-set_property PACKAGE_PIN AC56 [get_ports {DDR0_DQ[14]}]
+-set_property PACKAGE_PIN T57 [get_ports {DDR0_DQ[24]}]
+-set_property PACKAGE_PIN R58 [get_ports {DDR0_DQ[27]}]
+-set_property PACKAGE_PIN AB57 [get_ports {DDR0_DQ[15]}]
+-set_property PACKAGE_PIN T54 [get_ports {DDR0_DQS_T[3]}]
+-set_property PACKAGE_PIN T55 [get_ports {DDR0_DQS_C[3]}]
+-set_property PACKAGE_PIN R55 [get_ports {DDR0_DQ[25]}]
+-set_property PACKAGE_PIN R54 [get_ports {DDR0_DQ[30]}]
+-set_property PACKAGE_PIN AB54 [get_ports {DDR0_DQ[12]}]
+-set_property PACKAGE_PIN AA54 [get_ports {DDR0_DQS_T[1]}]
+-set_property PACKAGE_PIN AA55 [get_ports {DDR0_DQS_C[1]}]
+-set_property PACKAGE_PIN AA61 [get_ports {DDR0_DQ[22]}]
+-set_property PACKAGE_PIN AA60 [get_ports {DDR0_DQ[20]}]
+-set_property PACKAGE_PIN R57 [get_ports {DDR0_DQ[31]}]
+-set_property PACKAGE_PIN AA56 [get_ports {DDR0_DQ[13]}]
+-set_property PACKAGE_PIN AA57 [get_ports {DDR0_DQ[10]}]
+-set_property PACKAGE_PIN AC55 [get_ports {DDR0_DQ[8]}]
+-set_property PACKAGE_PIN Y63 [get_ports {DDR0_DQ[23]}]
+-set_property PACKAGE_PIN AB58 [get_ports {DDR0_DQ[21]}]
+-set_property PACKAGE_PIN AA62 [get_ports {DDR0_DQ[18]}]
+-set_property PACKAGE_PIN AB61 [get_ports {DDR0_DM[2]}]
+-set_property PACKAGE_PIN AB56 [get_ports {DDR0_DQ[11]}]
+-set_property PACKAGE_PIN AB53 [get_ports {DDR0_DQ[9]}]
+-set_property PACKAGE_PIN Y59 [get_ports {DDR0_DQS_T[2]}]
+-set_property PACKAGE_PIN Y60 [get_ports {DDR0_DQS_C[2]}]
+-set_property PACKAGE_PIN Y62 [get_ports {DDR0_DQ[19]}]
+-set_property PACKAGE_PIN AC53 [get_ports {DDR0_DM[1]}]
+-set_property PACKAGE_PIN AB59 [get_ports {DDR0_DQ[16]}]
+-set_property PACKAGE_PIN AA59 [get_ports {DDR0_DQ[17]}]
+-set_property PACKAGE_PIN AF60 [get_ports {DDR0_DQ[6]}]
+-set_property PACKAGE_PIN W53 [get_ports {DDR0_A[4]}]
+-set_property PACKAGE_PIN W52 [get_ports {DDR0_A[5]}]
+-set_property PACKAGE_PIN AC46 [get_ports {DDR0_A[0]}]
+-set_property PACKAGE_PIN AE62 [get_ports {DDR0_DQ[7]}]
+-set_property PACKAGE_PIN AH58 [get_ports {DDR0_DM[0]}]
+-set_property PACKAGE_PIN Y50 [get_ports {DDR0_A[8]}]
+-set_property PACKAGE_PIN Y47 [get_ports {DDR0_A[1]}]
+-set_property PACKAGE_PIN P51 [get_ports {DDR0_DQ[60]}]
+-set_property PACKAGE_PIN P53 [get_ports {DDR0_DQ[61]}]
+-set_property PACKAGE_PIN U53 [get_ports {DDR0_DQ[58]}]
+-set_property PACKAGE_PIN AG62 [get_ports {DDR0_DQS_T[0]}]
+-set_property PACKAGE_PIN AG63 [get_ports {DDR0_DQS_C[0]}]
+-set_property PACKAGE_PIN AG59 [get_ports {DDR0_DQ[0]}]
+-set_property PACKAGE_PIN AG58 [get_ports {DDR0_DQ[4]}]
+-set_property PACKAGE_PIN AA47 [get_ports {DDR0_A[9]}]
+-set_property PACKAGE_PIN Y49 [get_ports {DDR0_A[6]}]
+-set_property PACKAGE_PIN N51 [get_ports {DDR0_DQ[62]}]
+-set_property PACKAGE_PIN U52 [get_ports {DDR0_DQ[59]}]
+-set_property PACKAGE_PIN AF62 [get_ports {DDR0_DQ[1]}]
+-set_property PACKAGE_PIN AF61 [get_ports {DDR0_DQ[5]}]
+-set_property PACKAGE_PIN AG61 [get_ports {DDR0_DQ[2]}]
+-set_property PACKAGE_PIN AF59 [get_ports {DDR0_DQ[3]}]
+-set_property PACKAGE_PIN AB51 [get_ports {DDR0_CK_T[0]}]
+-set_property PACKAGE_PIN AB52 [get_ports {DDR0_CK_C[0]}]
+-set_property PACKAGE_PIN AA49 [get_ports {DDR0_A[7]}]
+-set_property PACKAGE_PIN R52 [get_ports {DDR0_DM[7]}]
+-set_property PACKAGE_PIN T52 [get_ports {DDR0_DQ[63]}]
+-set_property PACKAGE_PIN V56 [get_ports {DDR0_ODT[0]}]
+-set_property PACKAGE_PIN Y54 [get_ports {DDR0_BA[1]}]
+-set_property PACKAGE_PIN W51 [get_ports {DDR0_BG[0]}]
+-set_property PACKAGE_PIN Y45 [get_ports {DDR0_A[2]}]
+-set_property PACKAGE_PIN AA46 [get_ports {DDR0_A[3]}]
+-set_property PACKAGE_PIN P52 [get_ports {DDR0_DQ[56]}]
+-set_property PACKAGE_PIN AB49 [get_ports DDR0_ACT_N]
+-set_property PACKAGE_PIN W56 [get_ports {DDR0_CS_N[0]}]
+-set_property PACKAGE_PIN V51 [get_ports {DDR0_A[12]}]
+-set_property PACKAGE_PIN AC51 [get_ports {DDR0_A[13]}]
+-set_property PACKAGE_PIN M57 [get_ports {DDR0_DQ[44]}]
+-set_property PACKAGE_PIN L52 [get_ports {DDR0_DQ[54]}]
+-set_property PACKAGE_PIN L51 [get_ports {DDR0_DQ[55]}]
+-set_property PACKAGE_PIN T51 [get_ports {DDR0_DQ[57]}]
+-set_property PACKAGE_PIN N53 [get_ports {DDR0_DQS_T[7]}]
+-set_property PACKAGE_PIN N54 [get_ports {DDR0_DQS_C[7]}]
+-set_property PACKAGE_PIN V53 [get_ports {DDR0_CKE[0]}]
+-set_property PACKAGE_PIN AB46 [get_ports {DDR0_A[14]}]
+-set_property PACKAGE_PIN AC49 [get_ports {DDR0_A[15]}]
+-set_property PACKAGE_PIN K57 [get_ports {DDR0_DQ[42]}]
+-set_property PACKAGE_PIN M58 [get_ports {DDR0_DQ[45]}]
+-set_property PACKAGE_PIN N56 [get_ports {DDR0_DQ[40]}]
+-set_property PACKAGE_PIN M56 [get_ports {DDR0_DQS_T[5]}]
+-set_property PACKAGE_PIN L56 [get_ports {DDR0_DQS_C[5]}]
+-set_property PACKAGE_PIN M52 [get_ports {DDR0_DQ[52]}]
+-set_property PACKAGE_PIN L54 [get_ports {DDR0_DQ[53]}]
+-set_property PACKAGE_PIN K52 [get_ports {DDR0_DQS_T[6]}]
+-set_property PACKAGE_PIN K53 [get_ports {DDR0_DQS_C[6]}]
+-set_property PACKAGE_PIN Y48 [get_ports DDR0_RESET_N]
+-set_property PACKAGE_PIN AC50 [get_ports {DDR0_A[16]}]
+-set_property PACKAGE_PIN AC48 [get_ports {DDR0_A[10]}]
+-set_property PACKAGE_PIN AA45 [get_ports {DDR0_A[11]}]
+-set_property PACKAGE_PIN L57 [get_ports {DDR0_DQ[43]}]
+-set_property PACKAGE_PIN N58 [get_ports {DDR0_DQ[41]}]
+-set_property PACKAGE_PIN N55 [get_ports {DDR0_DQ[46]}]
+-set_property PACKAGE_PIN J51 [get_ports {DDR0_DQ[50]}]
+-set_property PACKAGE_PIN M51 [get_ports {DDR0_DQ[51]}]
+-set_property PACKAGE_PIN K54 [get_ports {DDR0_DQ[48]}]
+-set_property PACKAGE_PIN J52 [get_ports {DDR0_DQ[49]}]
+-set_property PACKAGE_PIN AB47 [get_ports {DDR0_BA[0]}]
+-set_property PACKAGE_PIN W55 [get_ports {DDR0_BG[1]}]
+-set_property PACKAGE_PIN P57 [get_ports {DDR0_DM[5]}]
+-set_property PACKAGE_PIN K58 [get_ports {DDR0_DQ[47]}]
+-set_property PACKAGE_PIN M53 [get_ports {DDR0_DM[6]}]
+-
+-####################################################################################
+-# Constraints from file : 'xiangshan.xdc'
+-####################################################################################
+-
+-set_property SLEW FAST [get_ports DDR0_RESET_N]
+-set_property IOSTANDARD SSTL12_DCI [get_ports DDR0_ACT_N]
+-set_property IOSTANDARD SSTL12_DCI [get_ports DDR0_RESET_N]
+-
+-####################################################################################
+-# Constraints from file : 'xiangshan.xdc'
+-####################################################################################
++# PHINE PD-VU19P-2-LSI SOLO v3/FMC2 + UV-FMCH-PDDR4DME DDR4 引脚约束
++# 由 tools/gen_ddr_xdc.py 从 pinmaps/fmc2_ddr4_pins.csv 生成 (UG §6.1.2.1 + BSP 引脚 xls 交叉验证)
++# MIG: SODIMM 64bit 单 rank 800MT/s; ECC/rank1/parity/alert 引脚未连接
++
++set_property PACKAGE_PIN BK44 [get_ports {DDR0_A[0]}]
++set_property PACKAGE_PIN BH41 [get_ports {DDR0_A[1]}]
++set_property PACKAGE_PIN BL44 [get_ports {DDR0_A[2]}]
++set_property PACKAGE_PIN BP45 [get_ports {DDR0_A[3]}]
++set_property PACKAGE_PIN BP43 [get_ports {DDR0_A[4]}]
++set_property PACKAGE_PIN BP42 [get_ports {DDR0_A[5]}]
++set_property PACKAGE_PIN BJ42 [get_ports {DDR0_A[6]}]
++set_property PACKAGE_PIN BE44 [get_ports {DDR0_A[7]}]
++set_property PACKAGE_PIN BN45 [get_ports {DDR0_A[8]}]
++set_property PACKAGE_PIN BF44 [get_ports {DDR0_A[9]}]
++set_property PACKAGE_PIN BM46 [get_ports {DDR0_A[10]}]
++set_property PACKAGE_PIN BF42 [get_ports {DDR0_A[11]}]
++set_property PACKAGE_PIN BG44 [get_ports {DDR0_A[12]}]
++set_property PACKAGE_PIN BJ45 [get_ports {DDR0_A[13]}]
++set_property PACKAGE_PIN BG42 [get_ports {DDR0_A[14]}]
++set_property PACKAGE_PIN BL42 [get_ports {DDR0_A[15]}]
++set_property PACKAGE_PIN BK45 [get_ports {DDR0_A[16]}]
++set_property PACKAGE_PIN BK42 [get_ports {DDR0_BA[0]}]
++set_property PACKAGE_PIN BJ47 [get_ports {DDR0_BA[1]}]
++set_property PACKAGE_PIN BE42 [get_ports {DDR0_BG[0]}]
++set_property PACKAGE_PIN BE43 [get_ports {DDR0_BG[1]}]
++set_property PACKAGE_PIN BG43 [get_ports {DDR0_ACT_N}]
++set_property PACKAGE_PIN BN46 [get_ports {DDR0_CK_T[0]}]
++set_property PACKAGE_PIN BP46 [get_ports {DDR0_CK_C[0]}]
++set_property PACKAGE_PIN BH44 [get_ports {DDR0_CKE[0]}]
++set_property PACKAGE_PIN BG41 [get_ports {DDR0_CS_N[0]}]
++set_property PACKAGE_PIN BL46 [get_ports {DDR0_ODT[0]}]
++set_property PACKAGE_PIN CC48 [get_ports {DDR0_RESET_N}]
++set_property PACKAGE_PIN BT46 [get_ports {DDR0_DM[0]}]
++set_property PACKAGE_PIN BP47 [get_ports {DDR0_DM[1]}]
++set_property PACKAGE_PIN BY44 [get_ports {DDR0_DM[2]}]
++set_property PACKAGE_PIN BV51 [get_ports {DDR0_DM[3]}]
++set_property PACKAGE_PIN CC54 [get_ports {DDR0_DM[4]}]
++set_property PACKAGE_PIN CC49 [get_ports {DDR0_DM[5]}]
++set_property PACKAGE_PIN CB47 [get_ports {DDR0_DM[6]}]
++set_property PACKAGE_PIN BR49 [get_ports {DDR0_DM[7]}]
++set_property PACKAGE_PIN BR44 [get_ports {DDR0_DQ[0]}]
++set_property PACKAGE_PIN BU43 [get_ports {DDR0_DQ[1]}]
++set_property PACKAGE_PIN BV45 [get_ports {DDR0_DQ[2]}]
++set_property PACKAGE_PIN BV44 [get_ports {DDR0_DQ[3]}]
++set_property PACKAGE_PIN BU44 [get_ports {DDR0_DQ[4]}]
++set_property PACKAGE_PIN BV43 [get_ports {DDR0_DQ[5]}]
++set_property PACKAGE_PIN BV46 [get_ports {DDR0_DQ[6]}]
++set_property PACKAGE_PIN BT44 [get_ports {DDR0_DQ[7]}]
++set_property PACKAGE_PIN BM49 [get_ports {DDR0_DQ[8]}]
++set_property PACKAGE_PIN BL47 [get_ports {DDR0_DQ[9]}]
++set_property PACKAGE_PIN BN48 [get_ports {DDR0_DQ[10]}]
++set_property PACKAGE_PIN BJ48 [get_ports {DDR0_DQ[11]}]
++set_property PACKAGE_PIN BK48 [get_ports {DDR0_DQ[12]}]
++set_property PACKAGE_PIN BM47 [get_ports {DDR0_DQ[13]}]
++set_property PACKAGE_PIN BN49 [get_ports {DDR0_DQ[14]}]
++set_property PACKAGE_PIN BM48 [get_ports {DDR0_DQ[15]}]
++set_property PACKAGE_PIN BY42 [get_ports {DDR0_DQ[16]}]
++set_property PACKAGE_PIN CB44 [get_ports {DDR0_DQ[17]}]
++set_property PACKAGE_PIN BW43 [get_ports {DDR0_DQ[18]}]
++set_property PACKAGE_PIN CA42 [get_ports {DDR0_DQ[19]}]
++set_property PACKAGE_PIN CC43 [get_ports {DDR0_DQ[20]}]
++set_property PACKAGE_PIN CC45 [get_ports {DDR0_DQ[21]}]
++set_property PACKAGE_PIN BY43 [get_ports {DDR0_DQ[22]}]
++set_property PACKAGE_PIN CC44 [get_ports {DDR0_DQ[23]}]
++set_property PACKAGE_PIN BW50 [get_ports {DDR0_DQ[24]}]
++set_property PACKAGE_PIN BW53 [get_ports {DDR0_DQ[25]}]
++set_property PACKAGE_PIN BU54 [get_ports {DDR0_DQ[26]}]
++set_property PACKAGE_PIN BT54 [get_ports {DDR0_DQ[27]}]
++set_property PACKAGE_PIN BV50 [get_ports {DDR0_DQ[28]}]
++set_property PACKAGE_PIN BV53 [get_ports {DDR0_DQ[29]}]
++set_property PACKAGE_PIN BV54 [get_ports {DDR0_DQ[30]}]
++set_property PACKAGE_PIN BW52 [get_ports {DDR0_DQ[31]}]
++set_property PACKAGE_PIN CA54 [get_ports {DDR0_DQ[32]}]
++set_property PACKAGE_PIN CA55 [get_ports {DDR0_DQ[33]}]
++set_property PACKAGE_PIN CB54 [get_ports {DDR0_DQ[34]}]
++set_property PACKAGE_PIN CB56 [get_ports {DDR0_DQ[35]}]
++set_property PACKAGE_PIN CB53 [get_ports {DDR0_DQ[36]}]
++set_property PACKAGE_PIN BY54 [get_ports {DDR0_DQ[37]}]
++set_property PACKAGE_PIN BY53 [get_ports {DDR0_DQ[38]}]
++set_property PACKAGE_PIN CB57 [get_ports {DDR0_DQ[39]}]
++set_property PACKAGE_PIN CC53 [get_ports {DDR0_DQ[40]}]
++set_property PACKAGE_PIN BY50 [get_ports {DDR0_DQ[41]}]
++set_property PACKAGE_PIN CB49 [get_ports {DDR0_DQ[42]}]
++set_property PACKAGE_PIN CA49 [get_ports {DDR0_DQ[43]}]
++set_property PACKAGE_PIN CB52 [get_ports {DDR0_DQ[44]}]
++set_property PACKAGE_PIN CA50 [get_ports {DDR0_DQ[45]}]
++set_property PACKAGE_PIN CB51 [get_ports {DDR0_DQ[46]}]
++set_property PACKAGE_PIN CA51 [get_ports {DDR0_DQ[47]}]
++set_property PACKAGE_PIN BY47 [get_ports {DDR0_DQ[48]}]
++set_property PACKAGE_PIN BW45 [get_ports {DDR0_DQ[49]}]
++set_property PACKAGE_PIN CA45 [get_ports {DDR0_DQ[50]}]
++set_property PACKAGE_PIN CA46 [get_ports {DDR0_DQ[51]}]
++set_property PACKAGE_PIN BW46 [get_ports {DDR0_DQ[52]}]
++set_property PACKAGE_PIN BY48 [get_ports {DDR0_DQ[53]}]
++set_property PACKAGE_PIN BY45 [get_ports {DDR0_DQ[54]}]
++set_property PACKAGE_PIN CA47 [get_ports {DDR0_DQ[55]}]
++set_property PACKAGE_PIN BR47 [get_ports {DDR0_DQ[56]}]
++set_property PACKAGE_PIN BU49 [get_ports {DDR0_DQ[57]}]
++set_property PACKAGE_PIN BW47 [get_ports {DDR0_DQ[58]}]
++set_property PACKAGE_PIN BU47 [get_ports {DDR0_DQ[59]}]
++set_property PACKAGE_PIN BV49 [get_ports {DDR0_DQ[60]}]
++set_property PACKAGE_PIN BR48 [get_ports {DDR0_DQ[61]}]
++set_property PACKAGE_PIN BT47 [get_ports {DDR0_DQ[62]}]
++set_property PACKAGE_PIN BW48 [get_ports {DDR0_DQ[63]}]
++set_property PACKAGE_PIN BT42 [get_ports {DDR0_DQS_T[0]}]
++set_property PACKAGE_PIN BK49 [get_ports {DDR0_DQS_T[1]}]
++set_property PACKAGE_PIN CB42 [get_ports {DDR0_DQS_T[2]}]
++set_property PACKAGE_PIN BU51 [get_ports {DDR0_DQS_T[3]}]
++set_property PACKAGE_PIN CA56 [get_ports {DDR0_DQS_T[4]}]
++set_property PACKAGE_PIN BY52 [get_ports {DDR0_DQS_T[5]}]
++set_property PACKAGE_PIN CB46 [get_ports {DDR0_DQS_T[6]}]
++set_property PACKAGE_PIN BU48 [get_ports {DDR0_DQS_T[7]}]
++set_property PACKAGE_PIN BU42 [get_ports {DDR0_DQS_C[0]}]
++set_property PACKAGE_PIN BL49 [get_ports {DDR0_DQS_C[1]}]
++set_property PACKAGE_PIN CB43 [get_ports {DDR0_DQS_C[2]}]
++set_property PACKAGE_PIN BU52 [get_ports {DDR0_DQS_C[3]}]
++set_property PACKAGE_PIN CA57 [get_ports {DDR0_DQS_C[4]}]
++set_property PACKAGE_PIN CA52 [get_ports {DDR0_DQS_C[5]}]
++set_property PACKAGE_PIN CC46 [get_ports {DDR0_DQS_C[6]}]
++set_property PACKAGE_PIN BV48 [get_ports {DDR0_DQS_C[7]}]
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index c9bd025..a28d9d4 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -1,401 +1,106 @@
+-####### Main board
+-#clk
+-
+-
+-
+-set_property PACKAGE_PIN AY50 [get_ports clk8_p]
+-set_property PACKAGE_PIN BA50 [get_ports clk8_n]
+-
+-set_property PACKAGE_PIN R42 [get_ports clk6_p]
+-set_property PACKAGE_PIN R43 [get_ports clk6_n]
+-
+-set_property PACKAGE_PIN C35 [get_ports clk5_p]
+-set_property PACKAGE_PIN C36 [get_ports clk5_n]
+-
+-#set_property PACKAGE_PIN CA36 [get_ports clk4_p]
+-#set_property PACKAGE_PIN CA37 [get_ports clk4_n]
+-
+-#set_property PACKAGE_PIN BY38 [get_ports clk3_p]
+-#set_property PACKAGE_PIN BY39 [get_ports clk3_n]
+-
+-#set_property PACKAGE_PIN CB19 [get_ports clk2_p]
+-#set_property PACKAGE_PIN CB18 [get_ports clk2_n]
+-
+-#set_property PACKAGE_PIN CA17 [get_ports clk1_p]
+-#set_property PACKAGE_PIN CA16 [get_ports clk1_n]
+-
+-#reset
+-set_property PACKAGE_PIN E47 [get_ports rstn_sw6]
+-set_property PACKAGE_PIN BY53 [get_ports rstn_sw5]
+-set_property PACKAGE_PIN CA39 [get_ports rstn_sw4]
+-
+-#uart
+-set_property PACKAGE_PIN AD13 [get_ports uart0_sout]
+-
+-set_property PACKAGE_PIN AE13 [get_ports uart0_sin]
+-
+-set_property PACKAGE_PIN AE14 [get_ports uart1_sout]
+-
+-set_property PACKAGE_PIN AE15 [get_ports uart1_sin]
+-
+-set_property PACKAGE_PIN V16 [get_ports uart2_sout]
+-
+-set_property PACKAGE_PIN W15 [get_ports uart2_sin]
+-#gpio
+-#set_property PACKAGE_PIN AA15 [get_ports GPIO_O0]
+-
+-#set_property PACKAGE_PIN AA16 [get_ports GPIO_O1]
+-#j5#
+-# set_property PACKAGE_PIN AL51 [get_ports SD_CLK]
+-#
+-# set_property PACKAGE_PIN AK49 [get_ports SD_CMD]
+-#
+-# set_property PACKAGE_PIN AL52 [get_ports SD_DATA0]
+-#
+-# set_property PACKAGE_PIN AK50 [get_ports SD_DATA1]
+-#
+-# set_property PACKAGE_PIN AM49 [get_ports SD_DATA2]
+-#
+-# set_property PACKAGE_PIN AK45 [get_ports SD_DATA3]
+-#
+-# set_property PACKAGE_PIN AN49 [get_ports SD_DECT]
+-#
+-
+-
+-
+-####### J1
+-set_property PACKAGE_PIN CC39 [get_ports led0]
+-
+-#set_property PACKAGE_PIN CB39 [get_ports led1]
+-
+-set_property PACKAGE_PIN CB36 [get_ports led2]
+-
+-set_property PACKAGE_PIN CC35 [get_ports led3]
+-
+-#J7# # set_property PACKAGE_PIN BK40 [get_ports QSPI_CS]
+-#
+-# set_property PACKAGE_PIN BN40 [get_ports QSPI_CLK]
+-#
+-# set_property PACKAGE_PIN BP41 [get_ports QSPI_DAT_0]
+-#
+-# set_property PACKAGE_PIN BK39 [get_ports QSPI_DAT_1]
+-#
+-# set_property PACKAGE_PIN BP40 [get_ports QSPI_DAT_2]
+-#
+-# set_property PACKAGE_PIN BG39 [get_ports QSPI_DAT_3]
+-#
+-# ##
+-# set_property PACKAGE_PIN BL32 [get_ports SD_CLK]
+-#
+-# set_property PACKAGE_PIN BJ33 [get_ports SD_CMD]
+-#
+-# set_property PACKAGE_PIN BM32 [get_ports SD_DATA0]
+-#
+-# set_property PACKAGE_PIN BK33 [get_ports SD_DATA1]
+-#
+-# set_property PACKAGE_PIN BJ31 [get_ports SD_DATA2]
+-#
+-# set_property PACKAGE_PIN BG33 [get_ports SD_DATA3]
+-#
+-# set_property PACKAGE_PIN BJ30 [get_ports SD_DECT]
+-#
+-##
+-# set_property PACKAGE_PIN J5 [get_ports QSPI_CS]
+-#
+-# set_property PACKAGE_PIN J1 [get_ports QSPI_CLK]
+-#
+-# set_property PACKAGE_PIN J2 [get_ports QSPI_DAT_0]
+-#
+-# set_property PACKAGE_PIN J6 [get_ports QSPI_DAT_1]
+-#
+-# set_property PACKAGE_PIN H1 [get_ports QSPI_DAT_2]
+-#
+-# set_property PACKAGE_PIN K3 [get_ports QSPI_DAT_3]
+-#
+-# ##
+-##J4
+-#set_property PACKAGE_PIN G49 [get_ports QSPI_CS]
+-#set_property PACKAGE_PIN M46 [get_ports QSPI_CLK]
+-#set_property PACKAGE_PIN L47 [get_ports QSPI_DAT_0]
+-#set_property PACKAGE_PIN H49 [get_ports QSPI_DAT_1]
+-#set_property PACKAGE_PIN M47 [get_ports QSPI_DAT_2]
+-#set_property PACKAGE_PIN H51 [get_ports QSPI_DAT_3]
+-
+-#create_clock -period 40.000 -name qspi_vclk [get_ports QSPI_CLK]
+-
+-
+-##J4
+-set_property PACKAGE_PIN F54 [get_ports JTAG_TCK]
+-set_property PACKAGE_PIN A54 [get_ports JTAG_TMS]
+-set_property PACKAGE_PIN H54 [get_ports JTAG_TDI]
+-set_property PACKAGE_PIN C54 [get_ports JTAG_TDO]
+-set_property PACKAGE_PIN G54 [get_ports JTAG_TRSTn]
+-
+-set_property PACKAGE_PIN K9 [get_ports SD_CLK]
+-
+-set_property PACKAGE_PIN H10 [get_ports SD_CMD]
+-
+-set_property PACKAGE_PIN K8 [get_ports SD_DATA0]
+-
+-set_property PACKAGE_PIN H9 [get_ports SD_DATA1]
+-
+-set_property PACKAGE_PIN G11 [get_ports SD_DATA2]
+-
+-set_property PACKAGE_PIN C8 [get_ports SD_DATA3]
+-
+-set_property PACKAGE_PIN F11 [get_ports SD_DECT]
+-
+-#set_property IOSTANDARD LVCMOS18 [get_ports SD_WP]
+-#set_property PACKAGE_PIN B8 [get_ports SD_WP]
+-
+-
+-######## J3
+-#set_property PACKAGE_PIN R40 [get_ports MDC]
+-#set_property PACKAGE_PIN R39 [get_ports MDIO]
+-#set_property PACKAGE_PIN P38 [get_ports RGMII_RXCLK]
+-#set_property PACKAGE_PIN L39 [get_ports RGMII_RXDV]
+-#set_property PACKAGE_PIN L40 [get_ports RGMII_RXD0]
+-#set_property PACKAGE_PIN R37 [get_ports RGMII_RXD1]
+-#set_property PACKAGE_PIN P37 [get_ports RGMII_RXD2]
+-#set_property PACKAGE_PIN N38 [get_ports RGMII_RXD3]
+-#set_property PACKAGE_PIN P40 [get_ports RGMII_TXCLK]
+-#set_property PACKAGE_PIN L37 [get_ports RGMII_TXEN]
+-#set_property PACKAGE_PIN N39 [get_ports RGMII_TXD0]
+-#set_property PACKAGE_PIN M39 [get_ports RGMII_TXD1]
+-#set_property PACKAGE_PIN N40 [get_ports RGMII_TXD2]
+-#set_property PACKAGE_PIN M37 [get_ports RGMII_TXD3]
+-#set_property PACKAGE_PIN W40 [get_ports PHY_RESET_B]
+-
+-####### J1
+-#set_property PACKAGE_PIN R15 [get_ports MDC]
+-#set_property PACKAGE_PIN T15 [get_ports MDIO]
+-#set_property PACKAGE_PIN H13 [get_ports RGMII_RXCLK]
+-#set_property PACKAGE_PIN K15 [get_ports RGMII_RXDV]
+-#set_property PACKAGE_PIN J15 [get_ports RGMII_RXD0]
+-#set_property PACKAGE_PIN H15 [get_ports RGMII_RXD1]
+-#set_property PACKAGE_PIN H14 [get_ports RGMII_RXD2]
+-#set_property PACKAGE_PIN G13 [get_ports RGMII_RXD3]
+-#set_property PACKAGE_PIN J13 [get_ports RGMII_TXCLK]
+-#set_property PACKAGE_PIN K13 [get_ports RGMII_TXEN]
+-#set_property PACKAGE_PIN L12 [get_ports RGMII_TXD0]
+-#set_property PACKAGE_PIN K12 [get_ports RGMII_TXD1]
+-#set_property PACKAGE_PIN J12 [get_ports RGMII_TXD2]
+-#set_property PACKAGE_PIN K14 [get_ports RGMII_TXD3]
+-#set_property PACKAGE_PIN N14 [get_ports PHY_RESET_B]
+-
+-####### J5
+-set_property PACKAGE_PIN AV58 [get_ports MDC]
+-set_property PACKAGE_PIN AU58 [get_ports MDIO]
+-set_property PACKAGE_PIN AM61 [get_ports RGMII_RXCLK]
+-set_property PACKAGE_PIN AN63 [get_ports RGMII_RXDV]
+-set_property PACKAGE_PIN AP63 [get_ports RGMII_RXD0]
+-set_property PACKAGE_PIN AN60 [get_ports RGMII_RXD1]
+-set_property PACKAGE_PIN AN61 [get_ports RGMII_RXD2]
+-set_property PACKAGE_PIN AM62 [get_ports RGMII_RXD3]
+-set_property PACKAGE_PIN AR62 [get_ports RGMII_TXCLK]
+-set_property PACKAGE_PIN AR63 [get_ports RGMII_TXEN]
+-set_property PACKAGE_PIN AP60 [get_ports RGMII_TXD0]
+-set_property PACKAGE_PIN AP61 [get_ports RGMII_TXD1]
+-set_property PACKAGE_PIN AT62 [get_ports RGMII_TXD2]
+-set_property PACKAGE_PIN AP62 [get_ports RGMII_TXD3]
+-set_property PACKAGE_PIN AR60 [get_ports PHY_RESET_B]
+-
+-set_property IOB TRUE [get_ports MDC]
+-set_property IOB TRUE [get_ports MDIO]
+-set_property IOB TRUE [get_ports RGMII_RXCLK]
+-set_property IOB TRUE [get_ports RGMII_RXDV]
+-set_property IOB TRUE [get_ports RGMII_RXD0]
+-set_property IOB TRUE [get_ports RGMII_RXD1]
+-set_property IOB TRUE [get_ports RGMII_RXD2]
+-set_property IOB TRUE [get_ports RGMII_RXD3]
+-set_property IOB TRUE [get_ports RGMII_TXCLK]
+-set_property IOB TRUE [get_ports RGMII_TXEN]
+-set_property IOB TRUE [get_ports RGMII_TXD0]
+-set_property IOB TRUE [get_ports RGMII_TXD1]
+-set_property IOB TRUE [get_ports RGMII_TXD2]
+-set_property IOB TRUE [get_ports RGMII_TXD3]
+-
+-
+-#create_clock -period 40.00 -name mac_rx_clk [get_ports RGMII_RXCLK]
+-#create_clock -period 40.00 -name mac_tx_clk [get_ports RGMII_TXCLK]
+-#set_output_delay -clock mac_tx_clk -max -add_delay 9.200 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-#set_output_delay -clock mac_tx_clk -min -add_delay 0.800 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-#set_output_delay -clock mac_tx_clk -clock_fall -max -add_delay 9.200 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-#set_output_delay -clock mac_tx_clk -clock_fall -min -add_delay 0.800 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-#set_input_delay -clock mac_rx_clk -max -add_delay 9.200 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-#set_input_delay -clock mac_rx_clk -min -add_delay 0.700 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-#set_input_delay -clock mac_rx_clk -clock_fall -max -add_delay 9.200 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-#set_input_delay -clock mac_rx_clk -clock_fall -min -add_delay 0.700 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-#set_property DRIVE 12 [get_ports RGMII_TXCLK]
+-#set_property DRIVE 12 [get_ports RGMII_TXEN]
+-#set_property DRIVE 12 [get_ports RGMII_TXD0]
+-#set_property DRIVE 12 [get_ports RGMII_TXD1]
+-#set_property DRIVE 12 [get_ports RGMII_TXD2]
+-#set_property DRIVE 12 [get_ports RGMII_TXD3]
+-
+-
+-#set_property DELAY_VALUE 900  [get_cells {*/util_gmii_to_rgmii_m0/delay_rgmii_rx* */util_gmii_to_rgmii_m0/rxdata_bus[*].delay_rgmii_rx*}]
+-
+-#set_property IODELAY_GROUP tri_mode_ethernet_mac_iodelay_grp [get_cells {*/util_gmii_to_rgmii_m0/delay_rgmii_tx* */util_gmii_to_rgmii_m0/txdata_out_bus[*].delay_rgmii_tx*}]
+-#set_property IODELAY_GROUP tri_mode_ethernet_mac_iodelay_grp [get_cells {*/util_gmii_to_rgmii_m0/delay_rgmii_rx* */util_gmii_to_rgmii_m0/rxdata_bus[*].delay_rgmii_rx*}]
+-#set_property IODELAY_GROUP tri_mode_ethernet_mac_iodelay_grp [get_cells  {IDELAYCTRL_inst}]
+-
+-# IDELAYCTRL reset input is false path
+-
+-#set_clock_groups -asynchronous -group [get_clocks -of_objects [get_ports clk8_p] -include_generated_clocks]
+-#set_clock_groups -asynchronous -group [get_clocks -of_objects [get_ports clk7_p] -include_generated_clocks]
+-#set_clock_groups -asynchronous -group [get_clocks -of_objects [get_ports clk6_p] -include_generated_clocks]
+-#set_clock_groups -asynchronous -group [get_clocks -of_objects [get_ports clk5_p] -include_generated_clocks]
+-#set_clock_groups -asynchronous -group [get_clocks -of_objects [get_ports refclk_p] -include_generated_clocks]
+-
+-#create_generated_clock -name rgmii1_txc -divide_by 1 -source [get_pins {xs_core_def/u_gmac_top/DWC_gmac_top_u0/DWC_gmac_inst/DWC_gmac_rgmii_inst/DWC_gmac_rgmii_gmrt_inst/clk_tx_div2_neg_reg/C}] [get_ports RGMII_TXCLK]
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-####################################################################################
+-# Constraints from file : 'ddr.xdc'
+-####################################################################################
+-
+-# set_property IOSTANDARD LVDS [get_ports clk1_p]
+-# set_property IOSTANDARD LVDS [get_ports clk1_n]
+-# set_property IOSTANDARD LVDS [get_ports clk2_p]
+-# set_property IOSTANDARD LVDS [get_ports clk2_n]
+-# set_property IOSTANDARD LVDS [get_ports clk3_p]
+-# set_property IOSTANDARD LVDS [get_ports clk3_n]
+-# set_property IOSTANDARD LVDS [get_ports clk4_p]
+-# set_property IOSTANDARD LVDS [get_ports clk4_n]
+-
+-#set_property IOSTANDARD LVDS [get_ports refclk_p]
+-#set_property IOSTANDARD LVDS [get_ports refclk_n]
+-#set_property IOSTANDARD LVCMOS33 [get_ports GPIO_O0]
+-#set_property IOSTANDARD LVCMOS33 [get_ports GPIO_O1]
+-#set_property IOSTANDARD LVCMOS18 [get_ports led1]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_CS]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_CLK]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_DAT_0]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_DAT_1]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_DAT_2]
+-#set_property IOSTANDARD LVCMOS18 [get_ports QSPI_DAT_3]
+-
+-
+-
+-#create_clock -name MMCM_CLK_OUT [get_nets xs_core_def/U_JTAG_DDR_SUBSYS/jtag_ddr_subsys_i/ddr4_0/inst/u_ddr4_infrastructure/addn_ui_clkout1]
+-
+-#set_clock_groups -group [get_clocks -include_generated_clocks CPU_CLK_IN] -group [get_clocks -include_generated_clocks SOC_SYS_CLK] -asynchronous
+-#set_clock_groups -group [get_clocks -include_generated_clocks TMCLK] -group [get_clocks -include_generated_clocks SOC_SYS_CLK] -asynchronous
+-#set_clock_groups -group [get_clocks -include_generated_clocks DEBUG_CLK_IN] -group [get_clocks -include_generated_clocks SOC_SYS_CLK] -asynchronous
+-#set_clock_groups -group [get_clocks -include_generated_clocks PCIE_CLK_IN] -group [get_clocks -include_generated_clocks SOC_SYS_CLK] -asynchronous
+-#set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks GCLK_RGMII_TXC] -group [get_clocks -include_generated_clocks SOC_SYS_CLK]
+-#set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks SOC_SYS_CLK]
+-
+-
+-
+-
+-
+ ####################################################################################
+-# Constraints from file : 'constraints.xdc'
++# PHINE PD-VU19P-2-LSI SOLO v3 — 顶层 IO 约束 (移植自 ai1 板 fpga.xdc)
++# 引脚来源: board/PD-VU19P-Solo/Pinlist/PD-VU19P-LSI-Solo-V3 (xls: UART/LED/PUSHSW/GPIO/
++#           CLK_200MHz/Global_CLK_P/N) — 详见 pinmaps/board_io.csv
++# 时钟方案:
++#   clk6 200MHz <- 板载固定 OSC (BW37/BY37)
++#   clk5  25MHz <- AEConsole PLL GC04 (BA51/BB51)  CPU 系统时钟
++#   clk7  80MHz <- AEConsole PLL GC02 (BM44/BN44)  DDR 参考时钟
++#   clk8   1MHz <- AEConsole PLL GC06 (E57/E58)    RTC
+ ####################################################################################
+ 
+-
+-
+-
+-
+-
+-
+-#create_clock -period 12.500 -name DDR_CLK [get_ports clk7_p]
+-
+-#create_generated_clock -name SOC_SYS_CLK -source [get_pins xs_core_def/U_JTAG_DDR_SUBSYS/jtag_ddr_subsys_i/SOC_CLK] -multiply_by 1
+-#create_generated_clock -name GCLK_RGMII_TXC -source [get_pins xs_core_def/U_JTAG_DDR_SUBSYS/jtag_ddr_subsys_i/MAC_CLK] -multiply_by 1
+-
++####### 时钟 (差分)
++set_property PACKAGE_PIN BW37 [get_ports clk6_p]
++set_property PACKAGE_PIN BY37 [get_ports clk6_n]
++
++set_property PACKAGE_PIN BM44 [get_ports clk7_p]
++set_property PACKAGE_PIN BN44 [get_ports clk7_n]
++
++set_property PACKAGE_PIN BA51 [get_ports clk5_p]
++set_property PACKAGE_PIN BB51 [get_ports clk5_n]
++
++set_property PACKAGE_PIN E57 [get_ports clk8_p]
++set_property PACKAGE_PIN E58 [get_ports clk8_n]
++
++####### 复位按键
++# PUSHSW1 -> rstn_sw6 (系统复位), PUSHSW2 -> rstn_sw5 (CPU复位)
++set_property PACKAGE_PIN BG18 [get_ports rstn_sw6]
++set_property PACKAGE_PIN BG17 [get_ports rstn_sw5]
++# PHINE 无第三个按键: rstn_sw4 (DDR复位) 挂 GPIO_6 上拉, 日常由 VIO sw4 控制
++set_property PACKAGE_PIN W16 [get_ports rstn_sw4]
++
++####### UART0 -> 后面板 RJ45 用户串口
++set_property PACKAGE_PIN BG14 [get_ports uart0_sout]
++set_property PACKAGE_PIN BH14 [get_ports uart0_sin]
++# uart1/uart2 备用 -> GPIO 排针 CN43 (GPIO_10/11/12/13)
++set_property PACKAGE_PIN Y14 [get_ports uart1_sout]
++set_property PACKAGE_PIN U14 [get_ports uart1_sin]
++set_property PACKAGE_PIN V13 [get_ports uart2_sout]
++set_property PACKAGE_PIN V15 [get_ports uart2_sin]
++
++####### LED 状态
++set_property PACKAGE_PIN AA16 [get_ports led0]     # cpu_wr_ddr_valid
++set_property PACKAGE_PIN AA14 [get_ports led2]     # cpu_rd_qspi_valid
++set_property PACKAGE_PIN AB13 [get_ports led3]     # init_calib_complete
++
++####### RISC-V 调试 JTAG -> GPIO 排针 CN43 (GPIO_1..5), 接 J-Link/FT2232 供 OpenOCD 用
++set_property PACKAGE_PIN W13 [get_ports JTAG_TCK]
++set_property PACKAGE_PIN V14 [get_ports JTAG_TMS]
++set_property PACKAGE_PIN U13 [get_ports JTAG_TDI]
++set_property PACKAGE_PIN Y13 [get_ports JTAG_TDO]
++set_property PACKAGE_PIN Y15 [get_ports JTAG_TRSTn]
+ 
+ ####################################################################################
+-# Constraints from file : 'jtag_ddr_subsys_s01_data_fifo_0_clocks.xdc'
++# IOSTANDARD / 电气属性
+ ####################################################################################
+-
+-
+-set_property PACKAGE_PIN Y52 [get_ports clk7_p]
+-set_property PACKAGE_PIN Y53 [get_ports clk7_n]
+-
+-create_clock -period 40.000 -name mac_rx_clk [get_ports RGMII_RXCLK]
+-create_clock -period 40.000 -name mac_tx_clk [get_ports RGMII_TXCLK]
+-set_clock_groups -asynchronous -group [get_clocks mac_rx_clk -include_generated_clocks]
+-create_clock -period 40.000 -name rgmii_rx_vclk_1
+-set_false_path -setup -rise_from [get_clocks rgmii_rx_vclk_1] -fall_to [get_clocks mac_rx_clk]
+-set_false_path -setup -fall_from [get_clocks rgmii_rx_vclk_1] -rise_to [get_clocks mac_rx_clk]
+-set_false_path -hold -rise_from [get_clocks rgmii_rx_vclk_1] -rise_to [get_clocks mac_rx_clk]
+-set_false_path -hold -fall_from [get_clocks rgmii_rx_vclk_1] -fall_to [get_clocks mac_rx_clk]
+-set_multicycle_path -setup -from [get_clocks rgmii_rx_vclk_1] -to [get_clocks mac_rx_clk] 0
+-set_multicycle_path -hold -from [get_clocks rgmii_rx_vclk_1] -to [get_clocks mac_rx_clk] -1
+-set_input_delay -clock [get_clocks rgmii_rx_vclk_1] -max 5.000 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-set_input_delay -clock [get_clocks rgmii_rx_vclk_1] -min 4.500 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-set_input_delay -clock [get_clocks rgmii_rx_vclk_1] -clock_fall -max -add_delay 5.000 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-set_input_delay -clock [get_clocks rgmii_rx_vclk_1] -clock_fall -min -add_delay 4.500 [get_ports {RGMII_RXD0 RGMII_RXD1 RGMII_RXD2 RGMII_RXD3 RGMII_RXDV}]
+-set_output_delay -clock [get_clocks mac_tx_clk] -max 12.750 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-set_output_delay -clock [get_clocks mac_tx_clk] -min 11.500 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-set_output_delay -clock [get_clocks mac_tx_clk] -clock_fall -max -add_delay 12.750 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
+-set_output_delay -clock [get_clocks mac_tx_clk] -clock_fall -min -add_delay 11.500 [get_ports {RGMII_TXD0 RGMII_TXD1 RGMII_TXD2 RGMII_TXD3 RGMII_TXEN}]
++set_property IOSTANDARD LVDS [get_ports clk5_p]
++set_property IOSTANDARD LVDS [get_ports clk5_n]
++set_property IOSTANDARD LVDS [get_ports clk6_p]
++set_property IOSTANDARD LVDS [get_ports clk6_n]
+ set_property IOSTANDARD LVDS [get_ports clk7_p]
+ set_property IOSTANDARD LVDS [get_ports clk7_n]
+ set_property IOSTANDARD LVDS [get_ports clk8_p]
+ set_property IOSTANDARD LVDS [get_ports clk8_n]
+-set_property IOSTANDARD LVDS [get_ports clk6_p]
+-set_property IOSTANDARD LVDS [get_ports clk6_n]
+-set_property IOSTANDARD LVDS [get_ports clk5_p]
+-set_property IOSTANDARD LVDS [get_ports clk5_n]
+ set_property DIFF_TERM TRUE [get_ports clk5_p]
+-set_property DIFF_TERM_ADV TERM_100  [get_ports clk5_p]
++set_property DIFF_TERM_ADV TERM_100 [get_ports clk5_p]
+ set_property DIFF_TERM TRUE [get_ports clk6_p]
+-set_property DIFF_TERM_ADV TERM_100  [get_ports clk6_p]
+-set_property IOSTANDARD LVCMOS18 [get_ports rstn_sw6]
+-set_property IOSTANDARD LVCMOS18 [get_ports rstn_sw5]
+-set_property IOSTANDARD LVCMOS18 [get_ports rstn_sw4]
++set_property DIFF_TERM_ADV TERM_100 [get_ports clk6_p]
++set_property DIFF_TERM TRUE [get_ports clk7_p]
++set_property DIFF_TERM_ADV TERM_100 [get_ports clk7_p]
++set_property DIFF_TERM TRUE [get_ports clk8_p]
++set_property DIFF_TERM_ADV TERM_100 [get_ports clk8_p]
++
++set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw6]
++set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw5]
++set_property IOSTANDARD LVCMOS33 [get_ports rstn_sw4]
++set_property PULLUP true [get_ports rstn_sw4]
++
+ set_property IOSTANDARD LVCMOS33 [get_ports uart0_sout]
+ set_property IOSTANDARD LVCMOS33 [get_ports uart0_sin]
+ set_property IOSTANDARD LVCMOS33 [get_ports uart1_sout]
+ set_property IOSTANDARD LVCMOS33 [get_ports uart1_sin]
+ set_property IOSTANDARD LVCMOS33 [get_ports uart2_sout]
+ set_property IOSTANDARD LVCMOS33 [get_ports uart2_sin]
+-set_property IOSTANDARD LVCMOS18 [get_ports led0]
+-set_property IOSTANDARD LVCMOS18 [get_ports led2]
+-set_property IOSTANDARD LVCMOS18 [get_ports led3]
+-set_property IOSTANDARD LVCMOS18 [get_ports JTAG_TCK]
+-set_property IOSTANDARD LVCMOS18 [get_ports JTAG_TMS]
+-set_property IOSTANDARD LVCMOS18 [get_ports JTAG_TDI]
+-set_property IOSTANDARD LVCMOS18 [get_ports JTAG_TDO]
+-set_property IOSTANDARD LVCMOS18 [get_ports JTAG_TRSTn]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_CLK]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_CMD]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_DATA0]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_DATA1]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_DATA2]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_DATA3]
+-set_property IOSTANDARD LVCMOS18 [get_ports SD_DECT]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXCLK]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXDV]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXD0]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXD1]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXD2]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_RXD3]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXCLK]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXEN]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXD0]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXD1]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXD2]
+-set_property IOSTANDARD LVCMOS18 [get_ports RGMII_TXD3]
+-set_property IOSTANDARD LVCMOS18 [get_ports MDC]
+-set_property IOSTANDARD LVCMOS18 [get_ports MDIO]
+-set_property IOSTANDARD LVCMOS18 [get_ports PHY_RESET_B]
+-create_clock -period 400.000 -name mdc_clk [get_ports MDC]
+-create_clock -period 5.000 -name CPU_CLK_IN [get_ports clk6_p]
+-create_clock -period 1000.000 -name TMCLK [get_ports clk8_p]
+-create_clock -period 40.000 -name DEBUG_CLK_IN [get_ports clk5_p]
+-create_clock -period 83.333 -name jtag_vclk [get_ports JTAG_TCK]
++
++set_property IOSTANDARD LVCMOS33 [get_ports led0]
++set_property IOSTANDARD LVCMOS33 [get_ports led2]
++set_property IOSTANDARD LVCMOS33 [get_ports led3]
++
++set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TCK]
++set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TMS]
++set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TDI]
++set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TDO]
++set_property IOSTANDARD LVCMOS33 [get_ports JTAG_TRSTn]
++set_property PULLUP true [get_ports JTAG_TRSTn]
++
++####################################################################################
++# 时钟定义与时钟组
++####################################################################################
++create_clock -period 5.000 -name CPU_CLK_IN [get_ports clk6_p]        # 200MHz OSC -> cqetmclk/CRG
++create_clock -period 1000.000 -name TMCLK [get_ports clk8_p]          # 1MHz RTC
++create_clock -period 40.000 -name DEBUG_CLK_IN [get_ports clk5_p]     # 25MHz CPU 系统时钟
++create_clock -period 83.333 -name jtag_vclk [get_ports JTAG_TCK]      # ~12MHz 调试 TCK
++
+ set_clock_groups -asynchronous -group [get_clocks jtag_vclk -include_generated_clocks]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks CPU_CLK_IN] -group [get_clocks -include_generated_clocks TMCLK]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks CPU_CLK_IN] -group [get_clocks -include_generated_clocks DEBUG_CLK_IN]
+@@ -407,18 +112,3 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks TMCLK]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks -include_generated_clocks DEBUG_CLK_IN]
+ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks jtag_vclk] -group [get_clocks [list clk7_p mmcm_clkout0 mmcm_clkout1 mmcm_clkout2 mmcm_clkout3 mmcm_clkout4 mmcm_clkout5 mmcm_clkout6 {pll_clk[0]} {pll_clk[1]} {pll_clk[2]} {pll_clk[0]_DIV} {pll_clk[2]_DIV} {pll_clk[1]_DIV}]]
+-set_property PULLUP true [get_ports SD_CMD]
+-set_property PULLUP true [get_ports SD_DATA0]
+-set_property PULLUP true [get_ports SD_DATA1]
+-set_property PULLUP true [get_ports SD_DATA2]
+-set_property PULLUP true [get_ports SD_DATA3]
+-set_property PULLUP true [get_ports MDC]
+-set_property PULLUP true [get_ports MDIO]
+-
+-####################################################################################
+-# Constraints for difftest_pcie_clock from CLK_WIZ
+-####################################################################################
+-
+-####################################################################################
+-# Constraints from file : 'jtag_ddr_subsys_s01_data_fifo_0_clocks.xdc'
+-####################################################################################
+diff --git a/fpga_diff/vivado/tcl/common/ahblite_axi_bridge_0.tcl b/fpga_diff/vivado/tcl/common/ahblite_axi_bridge_0.tcl
+index 0e1f7aa..6943a83 100755
+--- a/fpga_diff/vivado/tcl/common/ahblite_axi_bridge_0.tcl
++++ b/fpga_diff/vivado/tcl/common/ahblite_axi_bridge_0.tcl
+@@ -22,7 +22,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-  create_project xs_v3 xs_v3 -part xcvu19p-fsva3824-2-e
++  create_project xs_v3 xs_v3 -part xcvu19p-fsva3824-1-e
+   set_property target_language Verilog [current_project]
+   set_property simulator_language Mixed [current_project]
+ }
+diff --git a/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl b/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl
+index 9a7c3a7..d867a49 100644
+--- a/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl
++++ b/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl
+@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-   create_project project_1 myproj -part xcvu19p-fsva3824-2-e
++   create_project project_1 myproj -part xcvu19p-fsva3824-1-e
+ }
+ 
+ 
+diff --git a/fpga_diff/vivado/tcl/common/pcie4c_uscale_plus_0.tcl b/fpga_diff/vivado/tcl/common/pcie4c_uscale_plus_0.tcl
+index 7248756..0a69e9d 100755
+--- a/fpga_diff/vivado/tcl/common/pcie4c_uscale_plus_0.tcl
++++ b/fpga_diff/vivado/tcl/common/pcie4c_uscale_plus_0.tcl
+@@ -22,7 +22,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-  create_project pcie4c_uscale_plus_0_ex pcie4c_uscale_plus_0_ex -part xcvu19p-fsva3824-2-e
++  create_project pcie4c_uscale_plus_0_ex pcie4c_uscale_plus_0_ex -part xcvu19p-fsva3824-1-e
+   set_property target_language Verilog [current_project]
+   set_property simulator_language Mixed [current_project]
+ }
+diff --git a/fpga_diff/vivado/tcl/common/pcie_axi_axis_bd.tcl b/fpga_diff/vivado/tcl/common/pcie_axi_axis_bd.tcl
+index abeec8a..979ca2f 100755
+--- a/fpga_diff/vivado/tcl/common/pcie_axi_axis_bd.tcl
++++ b/fpga_diff/vivado/tcl/common/pcie_axi_axis_bd.tcl
+@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-   create_project project_1 myproj -part xcvu19p-fsva3824-2-e
++   create_project project_1 myproj -part xcvu19p-fsva3824-1-e
+ }
+ 
+ 
+diff --git a/fpga_diff/vivado/tcl/common/vio_0.tcl b/fpga_diff/vivado/tcl/common/vio_0.tcl
+index df984e4..db46d96 100755
+--- a/fpga_diff/vivado/tcl/common/vio_0.tcl
++++ b/fpga_diff/vivado/tcl/common/vio_0.tcl
+@@ -22,7 +22,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+ 
+ set list_projs [get_projects -quiet]
+ if { $list_projs eq "" } {
+-  create_project xs_nanhu xs_nanhu -part xcvu19p-fsva3824-2-e
++  create_project xs_nanhu xs_nanhu -part xcvu19p-fsva3824-1-e
+   set_property target_language Verilog [current_project]
+   set_property simulator_language Mixed [current_project]
+ }
+diff --git a/fpga_diff/vivado/tcl/common/xs_uart.tcl b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+index 52e813f..a56496c 100755
+--- a/fpga_diff/vivado/tcl/common/xs_uart.tcl
++++ b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+@@ -196,7 +196,7 @@ if { $validate_required } {
+ }
+ 
+ # Create project
+-create_project ${_xil_proj_name_} $project_dir -part xcvu19p-fsva3824-2-e
++create_project ${_xil_proj_name_} $project_dir -part xcvu19p-fsva3824-1-e
+ 
+ # Set the directory path for the new project
+ set proj_dir [get_property directory [current_project]]
+@@ -210,7 +210,7 @@ set_property -name "enable_vhdl_2008" -value "1" -objects $obj
+ set_property -name "ip_cache_permissions" -value "read write" -objects $obj
+ set_property -name "ip_output_repo" -value "$proj_dir/${_xil_proj_name_}.cache/ip" -objects $obj
+ set_property -name "mem.enable_memory_map_generation" -value "1" -objects $obj
+-set_property -name "part" -value "xcvu19p-fsva3824-2-e" -objects $obj
++set_property -name "part" -value "xcvu19p-fsva3824-1-e" -objects $obj
+ set_property -name "sim.central_dir" -value "$proj_dir/${_xil_proj_name_}.ip_user_files" -objects $obj
+ set_property -name "sim.ip.auto_export_scripts" -value "1" -objects $obj
+ set_property -name "source_mgmt_mode" -value "None" -objects $obj
+@@ -353,13 +353,13 @@ if {!$no_diff} {
+ 
+ # Create 'synth_1' run (if not found)
+ if {[string equal [get_runs -quiet synth_1] ""]} {
+-    create_run -name synth_1 -part xcvu19p-fsva3824-2-e -flow {Vivado Synthesis 2020} -strategy "Vivado Synthesis Defaults" -report_strategy {No Reports} -constrset constrs_1
++    create_run -name synth_1 -part xcvu19p-fsva3824-1-e -flow {Vivado Synthesis 2020} -strategy "Vivado Synthesis Defaults" -report_strategy {No Reports} -constrset constrs_1
+ } else {
+   set_property strategy "Vivado Synthesis Defaults" [get_runs synth_1]
+   set_property flow "Vivado Synthesis 2020" [get_runs synth_1]
+ }
+ set obj [get_runs synth_1]
+-set_property -name "part" -value "xcvu19p-fsva3824-2-e" -objects $obj
++set_property -name "part" -value "xcvu19p-fsva3824-1-e" -objects $obj
+ set_property -name "strategy" -value "Vivado Synthesis Defaults" -objects $obj
+ set_property -name "steps.synth_design.args.directive" -value "AlternateRoutability" -objects $obj
+ set_property -name "steps.synth_design.args.gated_clock_conversion" -value "auto" -objects $obj
+@@ -370,24 +370,24 @@ current_run -synthesis [get_runs synth_1]
+ 
+ # Create 'synth_2' run (if not found)
+ if {[string equal [get_runs -quiet synth_2] ""]} {
+-    create_run -name synth_2 -part xcvu19p-fsva3824-2-e -flow {Vivado Synthesis 2020} -strategy "Flow_PerfOptimized_high" -report_strategy {No Reports} -constrset constrs_1
++    create_run -name synth_2 -part xcvu19p-fsva3824-1-e -flow {Vivado Synthesis 2020} -strategy "Flow_PerfOptimized_high" -report_strategy {No Reports} -constrset constrs_1
+ } else {
+   set_property strategy "Flow_PerfOptimized_high" [get_runs synth_2]
+   set_property flow "Vivado Synthesis 2020" [get_runs synth_2]
+ }
+ set obj [get_runs synth_2]
+-set_property -name "part" -value "xcvu19p-fsva3824-2-e" -objects $obj
++set_property -name "part" -value "xcvu19p-fsva3824-1-e" -objects $obj
+ set_property -name "strategy" -value "Flow_PerfOptimized_high" -objects $obj
+ 
+ # Create 'impl_1' run (if not found)
+ if {[string equal [get_runs -quiet impl_1] ""]} {
+-    create_run -name impl_1 -part xcvu19p-fsva3824-2-e -flow {Vivado Implementation 2020} -strategy "Performance_WLBlockPlacementFanoutOpt" -report_strategy {No Reports} -constrset constrs_1 -parent_run synth_1
++    create_run -name impl_1 -part xcvu19p-fsva3824-1-e -flow {Vivado Implementation 2020} -strategy "Performance_WLBlockPlacementFanoutOpt" -report_strategy {No Reports} -constrset constrs_1 -parent_run synth_1
+ } else {
+   set_property strategy "Performance_WLBlockPlacementFanoutOpt" [get_runs impl_1]
+   set_property flow "Vivado Implementation 2020" [get_runs impl_1]
+ }
+ set obj [get_runs impl_1]
+-set_property -name "part" -value "xcvu19p-fsva3824-2-e" -objects $obj
++set_property -name "part" -value "xcvu19p-fsva3824-1-e" -objects $obj
+ set_property -name "strategy" -value "Performance_WLBlockPlacementFanoutOpt" -objects $obj
+ set_property -name "steps.place_design.args.directive" -value "WLDrivenBlockPlacement" -objects $obj
+ set_property -name "steps.phys_opt_design.args.directive" -value "AggressiveFanoutOpt" -objects $obj
+@@ -397,13 +397,13 @@ set_property -name "steps.write_bitstream.args.verbose" -value "0" -objects $obj
+ 
+ # Create 'impl_2' run (if not found)
+ if {[string equal [get_runs -quiet impl_2] ""]} {
+-    create_run -name impl_2 -part xcvu19p-fsva3824-2-e -flow {Vivado Implementation 2020} -strategy "Congestion_SSI_SpreadLogic_high" -report_strategy {No Reports} -constrset constrs_1 -parent_run synth_2
++    create_run -name impl_2 -part xcvu19p-fsva3824-1-e -flow {Vivado Implementation 2020} -strategy "Congestion_SSI_SpreadLogic_high" -report_strategy {No Reports} -constrset constrs_1 -parent_run synth_2
+ } else {
+   set_property strategy "Congestion_SSI_SpreadLogic_high" [get_runs impl_2]
+   set_property flow "Vivado Implementation 2020" [get_runs impl_2]
+ }
+ set obj [get_runs impl_2]
+-set_property -name "part" -value "xcvu19p-fsva3824-2-e" -objects $obj
++set_property -name "part" -value "xcvu19p-fsva3824-1-e" -objects $obj
+ set_property -name "strategy" -value "Congestion_SSI_SpreadLogic_high" -objects $obj
+ set_property -name "steps.write_bitstream.args.readback_file" -value "0" -objects $obj
+ set_property -name "steps.write_bitstream.args.verbose" -value "0" -objects $obj
+-- 
+2.43.0
+

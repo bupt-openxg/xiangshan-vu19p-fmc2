@@ -1,0 +1,47 @@
+From e72309552a56446115e335e54c108923d1d0f3c0 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Tue, 13 Oct 2026 00:02:29 +0800
+Subject: [PATCH 05/12] =?UTF-8?q?phine:=20move=20JTAG=5FTCK=20to=20GCIO=20?=
+ =?UTF-8?q?pin=20Y15=20(GPIO=5F5=20HDGC)=20=E2=80=94=20fixes=20Place=2030-?=
+ =?UTF-8?q?675=20IO->BUFG=20rule?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- TCK drives a BUFG (jtag_vclk domain); a non-clock IO pin violates rule_gclkio_bufg
+- Y15 = IO_L6P_HDGC_AD6P_98 is global-clock capable; other 4 JTAG pins rotated
+- LOC order in xdc is collision-free (works on top of old DCP-baked pins)
+---
+ fpga_diff/vivado/constr/common/fpga.xdc | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/fpga_diff/vivado/constr/common/fpga.xdc b/fpga_diff/vivado/constr/common/fpga.xdc
+index 5054481..7294c5b 100755
+--- a/fpga_diff/vivado/constr/common/fpga.xdc
++++ b/fpga_diff/vivado/constr/common/fpga.xdc
+@@ -45,12 +45,16 @@ set_property PACKAGE_PIN AA16 [get_ports led0]
+ set_property PACKAGE_PIN AA14 [get_ports led2]
+ set_property PACKAGE_PIN AB13 [get_ports led3]
+ 
+-####### RISC-V 调试 JTAG 引至 GPIO 排针 CN43 (GPIO_1..5), 接 J-Link/FT2232 供 OpenOCD 用
+-set_property PACKAGE_PIN W13 [get_ports JTAG_TCK]
+-set_property PACKAGE_PIN V14 [get_ports JTAG_TMS]
+-set_property PACKAGE_PIN U13 [get_ports JTAG_TDI]
+-set_property PACKAGE_PIN Y13 [get_ports JTAG_TDO]
+-set_property PACKAGE_PIN Y15 [get_ports JTAG_TRSTn]
++####### RISC-V 调试 JTAG 引至 GPIO 排针 CN43, 接 J-Link/FT2232 供 OpenOCD 用
++# TCK 必须落在全局时钟引脚(Y15=GPIO_5, IO_L6P_HDGC_98), 否则 IO->BUFG 违反时钟规则(Place 30-675)
++# 注意: 旧综合DCP中引脚为 TCK=W13,TMS=V14,TDI=U13,TDO=Y13,TRSTn=Y15;
++#       以下顺序为无冲突移位顺序(每步都写入刚释放的引脚), 勿随意调换!
++set_property PACKAGE_PIN W17 [get_ports JTAG_TCK]
++set_property PACKAGE_PIN W13 [get_ports JTAG_TMS]
++set_property PACKAGE_PIN V14 [get_ports JTAG_TDI]
++set_property PACKAGE_PIN U13 [get_ports JTAG_TDO]
++set_property PACKAGE_PIN Y13 [get_ports JTAG_TRSTn]
++set_property PACKAGE_PIN Y15 [get_ports JTAG_TCK]
+ 
+ ####################################################################################
+ # IOSTANDARD / 电气属性
+-- 
+2.43.0
+

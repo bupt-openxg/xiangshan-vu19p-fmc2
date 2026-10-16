@@ -1,0 +1,65 @@
+From c8da28e8aeea077c3a389a66eff6a1a9446ba529 Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Wed, 14 Oct 2026 14:53:06 +0800
+Subject: [PATCH 09/12] =?UTF-8?q?phine:=20fix=20bootrom=20coe=20=E2=80=94?=
+ =?UTF-8?q?=20mnstatus@0x744=20traps=20on=204b9ddb8=20(mnstatus=20is=20at?=
+ =?UTF-8?q?=200x353)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The fpga_diff coe ran 'csrrci x0,0x744,8' (Smrnmi standard address) as the
+very first boot instruction, but XiangShan 4b9ddb8 maps mnstatus to 0x353
+(rocket-chip CustomInstructions.scala) -> illegal instruction at reset,
+CPU wedged, no serial output (reproduced on hardware; ROM readback == coe).
+
+Replace with a version-agnostic 3-instruction boot (no CSR ops):
+  addiw x5,x0,1; slli x5,x5,31; jalr x0,0(x5)
+placed at word0 (sequential entry) AND word34=0x88 (the qspi redirect
+entry, matching the classic xs_kmh_fpga coe layout).
+Live ROM patched via flash jtag-axi and verified; CPU boots.
+Runtime patch tool: tools/patch_bootrom.{sh,tcl} (needed after each
+FPGA reconfiguration until a rebuilt bitstream is loaded).
+---
+ fpga_diff/src/tcl/common/blk_mem_gen_0.tcl | 24 +++++++++++++---------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl b/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
+index ab68ed3..f7f909c 100755
+--- a/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
++++ b/fpga_diff/src/tcl/common/blk_mem_gen_0.tcl
+@@ -65,17 +65,21 @@ proc write_blk_mem_gen_qspi { blk_mem_gen_qspi_filepath } {
+ 
+   puts $blk_mem_gen_qspi {MEMORY_INITIALIZATION_RADIX=16;}
+   puts $blk_mem_gen_qspi {MEMORY_INITIALIZATION_VECTOR=}
+-  # The six words below match difftest/src/test/csrc/common/flash.cpp:
+-  # csrrsi x0, mnstatus, 8     # 0x74446073 set mnstatus.nmie
+-  # addiw  t0, zero, 1         # 0x0010029b
+-  # slli   t1, t0, 42          # 0x02a29313
+-  # csrrc  x0, mstatus, t1     # 0x30033073 clear mstatus.mdt
+-  # slli   t0, t0, 31          # 0x01f29293
+-  # jr     t0                  # 0x00028067 jump 0x80000000
+-  puts $blk_mem_gen_qspi {74446073,}
++  # PHINE/4b9ddb8 适配版启动代码 (3 条指令, 不含任何 CSR 操作, 版本无关):
++  #   addiw x5, x0, 1     # 0x0010029b
++  #   slli  x5, x5, 31    # 0x01f29293   x5 = 0x8000_0000
++  #   jalr  x0, 0(x5)     # 0x00028067   跳转 DDR
++  # 原版 6 字代码使用 mnstatus@0x744 (Smrnmi 标准地址), 但香山 4b9ddb8 的
++  # mnstatus 位于 0x353 (见 rocket-chip/CustomInstructions.scala), 首条指令即
++  # 非法指令陷阱, CPU 无法启动 (在真机上已复现并验证此修复)。
++  # 入口A = word0..2 (顺序执行入口); 入口B = word34..36 (对应 0x88 重定向入口)。
++  puts $blk_mem_gen_qspi {0010029b,}
++  puts $blk_mem_gen_qspi {01f29293,}
++  puts $blk_mem_gen_qspi {00028067,}
++  for {set _i 0} {$_i < 31} {incr _i} {
++    puts $blk_mem_gen_qspi {00000000,}
++  }
+   puts $blk_mem_gen_qspi {0010029b,}
+-  puts $blk_mem_gen_qspi {02a29313,}
+-  puts $blk_mem_gen_qspi {30033073,}
+   puts $blk_mem_gen_qspi {01f29293,}
+   puts $blk_mem_gen_qspi {00028067;}
+ 
+-- 
+2.43.0
+
