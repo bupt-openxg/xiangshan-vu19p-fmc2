@@ -28,8 +28,12 @@ fi
 chmod +x "$MILL_DIR/mill"
 
 # 冒烟测试（flows/01 不 source env.sh, 这里显式优先用 tools/jdk 的 java）
+# 注意: 在临时目录里跑, 避免 mill 在当前目录留下 out/ 抓痕
 _smoke_bin="$(ls -d "$ROOT"/tools/jdk/*/bin 2>/dev/null | head -1)"
 [ -n "$_smoke_bin" ] && PATH="$_smoke_bin:$PATH"
-"$MILL_DIR/mill" --version >/dev/null 2>&1 || {
+_smoke_dir="$(mktemp -d)"
+( cd "$_smoke_dir" && "$MILL_DIR/mill" --version >/dev/null 2>&1 ) || {
+    rm -rf "$_smoke_dir"
     echo "[02] ERROR: mill launcher 冒烟测试失败（检查 java: tools/jdk 或系统 JDK17+）"; exit 1; }
-echo "[02] OK: mill $("$MILL_DIR/mill" --version 2>/dev/null | head -1) -> $JAR (launcher: tools/mill/mill)"
+echo "[02] OK: mill $( cd "$_smoke_dir" && "$MILL_DIR/mill" --version 2>/dev/null | head -1 ) -> $JAR (launcher: tools/mill/mill)"
+rm -rf "$_smoke_dir"
