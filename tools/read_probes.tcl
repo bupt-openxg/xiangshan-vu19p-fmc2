@@ -3,8 +3,10 @@
 # 用法: source tools/env.sh && vivado -mode tcl -source tools/read_probes.tcl
 #       （可用 -tclargs <bit目录> 覆盖, 默认 build/ 或 $FPGA_BIT_HOME）
 set root [file dirname [file dirname [file normalize [info script]]]]
-set bitdir "${FPGA_BIT_HOME}"
-if {$bitdir eq ""} { set bitdir "$root/build" }
+set bitdir "$root/build"
+if {[info exists ::env(FPGA_BIT_HOME)] && $::env(FPGA_BIT_HOME) ne ""} {
+    set bitdir $::env(FPGA_BIT_HOME)
+}
 if {[llength $::argv] > 0 && [lindex $::argv 0] ne ""} { set bitdir [lindex $::argv 0] }
 
 set bit [lindex [glob -nocomplain $bitdir/*.bit] 0]

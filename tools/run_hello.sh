@@ -28,7 +28,8 @@ make write_ddr WORKLOAD="$WL" 2>&1 | grep -E "100%|Error|ERROR" | tail -1
 echo "[3/4] 串口 $SER @115200 抓包 ${CAPSEC}s -> $LOG"
 fuser -k "$SER" >/dev/null 2>&1
 sleep 0.5
-stty -F "$SER" 115200 cs8 -cstopb -parenb -crtscts raw
+# -echo 必加: GNU stty 的 raw 不清 echo, 开着会把 FPGA 输出回写给 FPGA (input overrun/init 循环)
+stty -F "$SER" 115200 cs8 -cstopb -parenb -crtscts -echo raw
 timeout "$CAPSEC" cat "$SER" > "$LOG" &
 CAP=$!
 sleep 1

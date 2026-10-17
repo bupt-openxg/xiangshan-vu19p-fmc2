@@ -31,7 +31,8 @@ description: 在 PHINE PD-VU19P 板卡上运行与排障时使用：烧录、裸
 - 主机侧一律 **115200 8N1**；链路实际 ≈111.6kbps（25MHz/16/14），两端都对 3% 误差容忍。
 - **UART 分频必须由程序自设**：16550 复位默认分频 162 = **9600 波特**（上板实测读 DLL=0xA2 → 串口全静默）。裸机与 OpenSBI 均写 `LCR=0x83 → DLL=14, DLM=0 → LCR=0x03`。
 - **Linux 必须用时钟修正版镜像**：官方 `data_kmh.zip` 内嵌 DTB 写 UART clock=50MHz，与本设计 25MHz 不符 → 内核静默（只有 OpenSBI 横幅）。`tools/patch_linux_dtb_clock.py` 把 clock-frequency 改为 25,000,000；`flows/07` 自动生成 `sw/linux/data_patched.txt`。官方直链与 sha256 见 `sw/linux/README.md`。
-- 串口设备甄别（FT232R）：`udevadm info -q property -n /dev/ttyUSBx | grep ID_MODEL`；抓包：`stty -F <dev> 115200 cs8 -cstopb -parenb -crtscts raw && cat <dev>`。
+- 串口设备甄别（FT232R）：`udevadm info -q property -n /dev/ttyUSBx | grep ID_MODEL`；抓包：`stty -F <dev> 115200 cs8 -cstopb -parenb -crtscts -echo raw && cat <dev>`。
+- **`stty` 必须显式 `-echo`（实测踩坑）**：GNU `stty raw` **不清 echo**（echoe/echok 也保留）。echo 开着时主机行规程会把 FPGA 发来的每个字节**回写给 FPGA**（自环回）→ 客机收到自己的输出：内核日志出现 `ttyS0: N input overrun(s)`、init/console 反复被打断、shell 无法交互。典型鉴别：裸机 Hello 正常（只发不收），但 Linux 启动日志重复交织、键入命令无响应。修复/自检：`stty -F $SER ... -echo raw`，再 `stty -F $SER -a | grep echo` 确认 `-echo`。
 
 ## 预期输出
 

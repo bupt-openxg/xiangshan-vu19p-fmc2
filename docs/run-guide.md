@@ -62,7 +62,7 @@ make halt_soc FPGA_BIT_HOME=$V
 make write_ddr WORKLOAD=$XS_ROOT/sw/baremetal/hello.txt
 
 # ③ 串口 115200 打开并开始抓包，然后释放 CPU（VIO sw5 上升沿）
-stty -F /dev/ttyUSB0 115200 cs8 -cstopb -parenb -crtscts raw
+stty -F /dev/ttyUSB0 115200 cs8 -cstopb -parenb -crtscts -echo raw
 cat /dev/ttyUSB0 &
 make reset_cpu FPGA_BIT_HOME=$V
 ```
@@ -113,7 +113,7 @@ make halt_soc FPGA_BIT_HOME=$V
 make write_ddr WORKLOAD=$XS_ROOT/sw/linux/data_patched.txt
 
 # ③ 串口 115200 抓包，然后释放 CPU
-stty -F /dev/ttyUSB0 115200 cs8 -cstopb -parenb -crtscts raw
+stty -F /dev/ttyUSB0 115200 cs8 -cstopb -parenb -crtscts -echo raw
 cat /dev/ttyUSB0 &
 make reset_cpu FPGA_BIT_HOME=$V
 ```

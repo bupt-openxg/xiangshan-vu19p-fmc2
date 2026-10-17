@@ -15,7 +15,9 @@
 1. **不要碰板上按键/拨码**（设计里它们被路由为 VIO 探针，物理按键无意义且板卡无上下拉）。
    一切操作走 `third_party/env-scripts/fpga_diff` 的 `make halt_soc / write_ddr / reset_cpu`
    或 `flows/` 一键脚本。
-2. **串口一律 115200 8N1**；运行 Linux 必须用时钟修正版镜像（`flows/07` 自动生成；
+2. **串口一律 115200 8N1，且 `stty` 必须显式 `-echo`**（GNU `stty raw` 不会关 echo；
+   否则主机行规程把 FPGA 输出回写给 FPGA，Linux 表现为 `ttyS0: input overrun`、
+   init/shell 反复被打断）。运行 Linux 必须用时钟修正版镜像（`flows/07` 自动生成；
    手工跑时**勿**直接把 `sw/linux/data.txt` 灌进 DDR）。
 3. **不要删除 Vivado 工程目录**（`third_party/env-scripts/fpga_diff/fpga_vivado_kmh-nodiff/`）；
    构建中断后用 `tools/rerun_bitstream.sh` 重置重跑。
@@ -78,13 +80,14 @@ vivado -mode tcl -source tools/read_probes.tcl   # 读全部 VIO 探针
 | `baremetal-riscv-hello-first-light` | 裸机 first-light 五坑：栈/build-id/objcopy 段过滤/静态链接/UART 分频 + 负载格式与复现比对 |
 | `git-submodule-shallow-clone-traps` | submodule 浅克隆三类陷阱、POSIX foreach、范围最小化、离线镜像验证（通用知识，非本板专属）|
 
-## 验证状态（2026-10-16；详见 README §四）
+## 验证状态（2026-10-17；详见 README §四）
 
-- ✅ **在本仓库内实测**：`flows/02`（依赖 + submodule SHA 对齐 + 补丁链）、
-  `flows/03`（RTL 生成，与上板验证过的原构建**逐字节比对 1578/1579 一致**）、
-  `sw/baremetal`（产物与上板实测原产物逐字节一致）、`setup/00` 与 `setup/03-07`（离线）、
-  新克隆端到端烟测（clone → flows/00 → flows/02）。
-- ▶️ **未复跑**：`flows/04` 比特流（7h，原工程实测时序收敛 WNS=+0.469ns）；
-  `flows/05-08` 上板步骤（板卡未连接）；`setup/01-02`（JDK/mill 下载，受网络限制）。
-- 上板结论（原始工程，2026-10-15 实测）：Hello 与 Linux 均在 115200 8N1 下通过，
-  证据在 `docs/evidence/`。
+- ✅ **全链在本仓库内实测通过**（干净环境 → 实板）：依赖/补丁、RTL（与原 RTL
+  1578/1579 逐字节一致）、综合（1h51m，0 errors/0 critical）、布线（WNS +0.469ns，
+  与原构建一致）、比特流、烧录、裸机 Hello、官方 Linux（OpenSBI → 内核 → buildroot
+  shell 可交互，`uname -a`/`ls /` 通过）。实录见 `docs/evidence/*freshbuild*`。
+- ✅ 新克隆端到端烟测（GitHub clone → flows/00 → flows/02 → 12 补丁 `git am`）。
+- ⚠️ 上板实测中发现并修复的交付缺陷：`setup/02-mill.sh`（全新环境缺 launcher）、
+  `prog_bitstream.tcl`/`read_probes.tcl`（Tcl 误用 bash 展开）、`flows/05`（缺成功校验）、
+  `run_hello.sh`/`run_linux.sh`（stty 未关 echo → 串口自环回）。
+- ▶️ 未重跑：`flows/08` 板卡诊断（原工程实测通过）；`setup/01-02` 的下载路径（URL 未变）。

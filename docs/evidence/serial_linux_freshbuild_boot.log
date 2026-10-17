@@ -1,0 +1,181 @@
+
+OpenSBI v1.5.1-3-g0dfdb94
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : bosc,kmh-v2-1core
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 1000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : ---
+Platform Shutdown Device  : ---
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 392 B (used), 3704 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x00000000310b0000-0x00000000310b0fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000038000000-0x000000003800ffff M: (I,R,W) S/U: ()
+Domain0 Region02          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region03          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region04          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080400000
+Domain0 Next Arg1         : 0x0000000080200000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdcbvh
+Boot HART ISA Extensions  : smaia,smstateen,sscofpmf,sstc,zicntr,zihpm,sdtrig
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 12 bits
+Boot HART PMP Address Bits: 46
+Boot HART MHPM Info       : 29 (0xfffffff8)
+Boot HART Debug Triggers  : 4 triggers
+Boot HART MIDELEG         : 0x0000000000003666
+Boot HART MEDELEG         : 0x0000000000f0b509
+[    0.000000] Linux version 6.10.7-00060-g80dff865005d-dirty (wangran@open06) (riscv64-unknown-linux-gnu-gcc (ge97179bacd0) 15.0.0 20241107 (experimental), GNU ld (GNU Binutils) 2.43.1) #25 SMP Mon Feb 24 18:01:21 CST 2025
+[    0.000000] Machine model: bosc,kmh-v2-1core
+[    0.000000] SBI specification v2.0 detected
+[    0.000000] SBI implementation ID=0x1 Version=0x10005
+[    0.000000] SBI TIME extension detected
+[    0.000000] SBI IPI extension detected
+[    0.000000] SBI RFENCE extension detected
+[    0.000000] SBI DBCN extension detected
+[    0.000000] earlycon: ns16550a0 at MMIO32 0x00000000310b0000 (options '115200n8')
+[    0.000000] printk: legacy bootconsole [ns16550a0] enabled
+[    0.000000] OF: reserved mem: 0x0000000080000000..0x000000008003ffff (256 KiB) nomap non-reusable mmode_resv1@80000000
+[    0.000000] OF: reserved mem: 0x0000000080040000..0x000000008005ffff (128 KiB) nomap non-reusable mmode_resv0@80040000
+[    0.000000] Zone ranges:
+[    0.000000]   DMA32    [mem 0x0000000080000000-0x00000000ffffffff]
+[    0.000000]   Normal   empty
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000080000000-0x000000008005ffff]
+[    0.000000]   node   0: [mem 0x0000000080060000-0x00000000ffffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000080000000-0x00000000ffffffff]
+[    0.000000] SBI HSM extension detected
+[    0.000000] CPU with hartid=1 is not available
+[    0.000000] CPU with hartid=2 is not available
+[    0.000000] CPU with hartid=3 is not available
+[    0.000000] CPU with hartid=4 is not available
+[    0.000000] CPU with hartid=5 is not available
+[    0.000000] CPU with hartid=6 is not available
+[    0.000000] CPU with hartid=7 is not available
+[    0.000000] CPU with hartid=8 is not available
+[    0.000000] CPU with hartid=9 is not available
+[    0.000000] CPU with hartid=10 is not available
+[    0.000000] CPU with hartid=11 is not available
+[    0.000000] CPU with hartid=12 is not available
+[    0.000000] CPU with hartid=13 is not available
+[    0.000000] CPU with hartid=14 is not available
+[    0.000000] CPU with hartid=15 is not available
+[    0.000000] Zicbom detected in ISA string, disabling as no cbom-block-size found
+[    0.000000] Zicboz detected in ISA string, disabling as no cboz-block-size found
+[    0.000000] riscv: base ISA extensions acdfhimv
+[    0.000000] riscv: ELF capabilities acdfimv
+[    0.000000] percpu: Embedded 16 pages/cpu s35040 r0 d30496 u65536
+[    0.000000] pcpu-alloc: s35040 r0 d30496 u65536 alloc=16*4096
+[    0.000000] pcpu-alloc: [0] 0 
+[    0.000000] Kernel command line: console=ttyS0,115200 earlycon loglevel=8 drm.debug=0x2 amdgpu.cik=1 amdgpu.si=1 amdgpu.dpm=0 pcie_aspm=off pcie_port_pm=off amdgpu.vm_update_mode=3 root=/dev/sda1 rw 
+[    0.000000] Unknown kernel command line parameters "pcie_aspm=off pcie_port_pm=off", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 524288
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 2055660K/2097152K available (1642K kernel code, 576K rwdata, 422K rodata, 6249K init, 296K bss, 41492K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU event tracing is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=1.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 10 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] riscv-intc: 64 local interrupts mapped using AIA
+[    0.000000] riscv: providing IPIs using SBI IPI extension
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] clocksource: riscv_clocksource: mask: 0xffffffffffffffff max_cycles: 0x1d854df40, max_idle_ns: 3526361616960 ns
+[    0.000029] sched_clock: 64 bits at 1000kHz, resolution 1000ns, wraps every 2199023255500ns
+[    0.009291] riscv-timer: Timer interrupt in S-mode is available via sstc extension
+[    0.022602] Console: colour dummy device 80x25
+[    0.029438] Calibrating delay loop (skipped), value calculated using timer frequency.. 2.00 BogoMIPS (lpj=10000)
+[    0.041036] pid_max: default: 32768 minimum: 301
+[    0.051496] Mount-cache hash table entries: 4096 (order: 3, 32768 bytes, linear)
+[    0.060969] Mountpoint-cache hash table entries: 4096 (order: 3, 32768 bytes, linear)
+[    0.126856] ASID allocator using 16 bits (65536 entries)
+[    0.138588] rcu: Hierarchical SRCU implementation.
+[    0.144071] rcu: 	Max phase no-delay instances is 1000.
+[    0.169112] smp: Bringing up secondary CPUs ...
+[    0.175313] smp: Brought up 1 node, 1 CPU
+[    0.285697] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.297362] futex hash table entries: 256 (order: 2, 16384 bytes, linear)
+[    0.306209] pinctrl core: initialized pinctrl subsystem
+[    0.328710] DMA: preallocated 256 KiB GFP_KERNEL pool for atomic allocations
+[    0.338156] DMA: preallocated 256 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    0.419543] cpu0: Ratio of byte access time to unaligned word access is 0.75, unaligned accesses are slow
+[    0.494578] clocksource: Switched to clocksource riscv_clocksource
+[    0.656898] workingset: timestamp_bits=62 max_order=19 bucket_order=0
+[    0.949446] Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+[    0.990374] of_serial 310b0000.serial: error -6: IRQ index 0 not found
+[    1.003555] printk: legacy console [ttyS0] disabled
+[    1.018965] 310b0000.serial: ttyS0 at MMIO 0x310b0000 (irq = 0, base_baud = 1562500) is a 16550A
+[    1.030215] printk: legacy console [ttyS0] enabled
+[    1.030215] printk: legacy console [ttyS0] enabled
+[    1.042246] printk: legacy bootconsole [ns16550a0] disabled
+[    1.042246] printk: legacy bootconsole [ns16550a0] disabled
+[    1.541978] clk: Disabling unused clocks
+[    3.211926] Freeing unused kernel image (initmem) memory: 6244K
+[    3.220112] Kernel memory protection not selected by kernel config.
+[    3.227941] Run /init as init process
+[    3.232221]   with arguments:
+[    3.236137]     /init
+[    3.238953]   with environment:
+[    3.242568]     HOME=/
+[    3.245709]     TERM=linux
+[    3.248955]     pcie_aspm=off
+[    3.252400]     pcie_port_pm=off
+[    3.265634] Failed to execute /init (error -8)
+[    3.271059] Run /sbin/init as init process
+[    3.276377]   with arguments:
+[    3.279874]     /sbin/init
+[    3.283057]   with environment:
+[    3.286979]     HOME=/
+[    3.289838]     TERM=linux
+[    3.293008]     pcie_aspm=off
+[    3.296842]     pcie_port_pm=off
+mount: mounting devpts on /dev/pts failed: No such device
+can't open /dev/null: No such file or directory
+can't open /dev/null: No such file or directory
+can't open /dev/null: No such file or directory
+can't open /dev/null: No such file or directory
+Saving 256 bits of non-creditable seed for next boot
+Starting syslogd: OK
+Starting klogd: OK
+Running sysctl: OK
+Starting network: ip: socket: Function not implemented
+ip: socket: Function not implemented
+FAIL
+Linux buildroot 6.10.7-00060-g80dff865005d-dirty #25 SMP Mon Feb 24 18:01:21 CST 2025 riscv64 GNU/Linux
+# 

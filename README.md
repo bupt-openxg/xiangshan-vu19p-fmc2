@@ -81,10 +81,12 @@ ReConstruct/
 | 工具链安装（flows/01）| ✅ `setup/00`（make 本地化）与 `setup/03-07` 已实测通过（03：已有 swap 自动跳过；04/05：厂商 BSP 未放置时优雅退出；06：bin2fpgadata；07：riscv64 交叉工具链 + make + xlrd）。`setup/01-02`（GraalVM JDK 21 / mill，约 1.2GB 下载）本轮网络受限未复跑，URL 与校验逻辑保持原样 |
 | RTL 生成（flows/03）| ✅ **在本仓库内实测通过**：`make verilog` 产出 1579 文件，模拟器残留检查通过（DPI 全部 `ifndef SYNTHESIS` 门控），后处理完成。与原工程**上板验证过的同一份 RTL 逐字节比对：1578/1579 一致**；唯一差异 `XSTop.fir` 是 FIRRTL 中间文件的源码定位器绝对路径字符串（345 万处，不参与综合），综合输入（`XSTop.sv` 等）全部一致 |
 | 裸机负载（sw/baremetal）| ✅ **在本仓库内实测**：`make` 产出与上板实测原产物逐字节一致（`hello.elf/bin/txt` 等 9 个产物中 7 个完全相同；2 个 `.elf` 仅差 gcc 随机临时目标文件名 `ccXXXXXX.o`，`.bin/.txt` 均逐字节相同）|
-| 比特流构建（flows/04）| ✅ 在**原始开发工程**完整跑通（时序收敛 WNS=+0.469ns，0 失败端点）。本仓库为同一命令 + 路径改写，**未在本仓库内重跑**（7.5h）；首次使用请以本流程实际产出为准 |
-| 烧录 + 裸机 Hello（flows/05/06）| ✅ 原始工程实测（2026-10-15，串口 115200 输出 `Hello, XiangShan! (MinimalConfig on PHINE PD-VU19P, 115200 8N1)`）|
-| 官方 Linux 镜像（flows/07）| ✅ 原始工程实测：OpenSBI v1.5.1 → Linux 6.10.7 → **buildroot shell 可交互**（`uname -a`/`ls /` 通过）|
-| 板卡诊断（flows/08）| ✅ 原始工程实测（四路时钟/引脚/复位逻辑/串口链路全部通过）|
+| 比特流构建（flows/04）| ✅ **在本仓库内实测完成**（2026-10-17）：综合 1h51m（0 errors / 0 critical warnings），布线 WNS **+0.469ns**（与原构建完全一致）、DRC 0 Errors；产出 `fpga_top_debug.bit`（199MB）+ `.ltx`。中途经历一次主机崩溃，用 `reset_runs -prev_step` 从 phys_opt 检查点续跑（仅损失 route 起始约 5 分钟）|
+| 烧录 + 裸机 Hello（flows/05/06）| ✅ **在本仓库内实测**（2026-10-17）：`End of startup status: HIGH`；串口 115200 输出 `Hello, XiangShan! (MinimalConfig on PHINE PD-VU19P, 115200 8N1)`（实录 `docs/evidence/serial_hello_freshbuild.log`）|
+| 官方 Linux 镜像（flows/07）| ✅ **在本仓库内实测**（2026-10-17）：OpenSBI v1.5.1 → Linux 6.10.7 → **buildroot shell 可交互**（`uname -a` / `ls /` 实录 `docs/evidence/serial_linux_freshbuild_*.log`；启动日志与原成功证据逐字节一致，仅内核时间戳微秒抖动）。失败变体（串口 echo 自环回）留档 `serial_linux_echo_bug_repro.log` 供排障对照 |
+| 板卡诊断（flows/08）| ✅ 原始工程实测（四路时钟/引脚/复位逻辑/串口链路全部通过）；本轮未重跑 |
+
+> 上板实测中发现并修复的交付缺陷（均已入库）：`setup/02-mill.sh`（全新环境下缺目录/launcher，curl 直接失败）、`prog_bitstream.tcl`/`read_probes.tcl`（Tcl 误用 bash 的 `${VAR:-默认}` 展开）、`flows/05`（未检查烧录成功标记）、`run_hello.sh`/`run_linux.sh`（`stty raw` 不会关闭 echo → 主机把 FPGA 输出回灌成输入，Linux 表现为 `ttyS0: input overrun` 与 init/shell 反复被打断）。
 
 实测样例输出见 `docs/evidence/`（串口日志、DTB 证据等）；完整调试与根因见 `docs/build-log.md`。
 

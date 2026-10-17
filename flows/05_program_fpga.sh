@@ -16,7 +16,16 @@ source "$ROOT/tools/env.sh" >/dev/null 2>&1 || true
 }
 
 echo "[05] 烧录 build/fpga_top_debug.bit → FPGA"
-vivado -mode tcl -source "$ROOT/tools/prog_bitstream.tcl"
+LOG="${BUILD_ROOT}/logs/program-$(date +%Y%m%d-%H%M).log"
+mkdir -p "$(dirname "$LOG")"
+rc=0
+vivado -mode tcl -source "$ROOT/tools/prog_bitstream.tcl" 2>&1 | tee "$LOG" || rc=$?
+# vivado -mode tcl 在 Tcl 报错时不一定返回非零, 以脚本成功标记为准
+if [ "$rc" -ne 0 ] || ! grep -q "=== 比特流烧录完成 ===" "$LOG"; then
+    echo
+    echo "ERROR: 烧录失败（vivado 退出码 $rc，日志: $LOG）"
+    exit 1
+fi
 
 echo
 echo "==== 烧录完成 ===="
