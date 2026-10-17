@@ -18,11 +18,38 @@ URL="${KMH_IMAGE_URL:-https://raw.githubusercontent.com/OpenXiangShan/XiangShan-
 SHA256="483e077e0ef8d4e8afc8c896273fa239f5f871ed5b38459de3fc7cab3671876c"
 ZIP="$DEST/data_kmh.zip"
 
+verify() { echo "$SHA256  $1" | sha256sum -c --status - 2>/dev/null; }
+
 mkdir -p "$DEST"
-if [ ! -f "$ZIP" ]; then
+ok=0
+if [ -f "$ZIP" ] && verify "$ZIP"; then
+    ok=1
+    echo "[fetch] 已存在且校验通过，跳过下载"
+fi
+
+if [ "$ok" = 0 ]; then
     echo "[fetch] 下载官方镜像: $URL"
-    curl -fL --retry 3 -o "$ZIP.part" "$URL"
-    mv "$ZIP.part" "$ZIP"
+    for i in $(seq 1 8); do
+        # --http1.1           : raw.githubusercontent.com 上 HTTP/2 偶发 PROTOCOL_ERROR，降级规避
+        # -C -                : 断点续传（.part 跨重试复用）
+        # --speed-time/-limit : 低于 1KB/s 持续 60s 视为卡死，主动断开进入下一轮续传
+        if curl -fL --http1.1 -C - \
+                --retry 3 --retry-delay 3 --retry-all-errors \
+                --connect-timeout 20 --speed-time 60 --speed-limit 1024 \
+                -o "$ZIP.part" "$URL"; then
+            if verify "$ZIP.part"; then
+                mv -f "$ZIP.part" "$ZIP"; ok=1
+                echo "[fetch] 下载完成（第 $i 轮）"
+                break
+            fi
+            echo "[fetch] 第 $i 轮: 校验不符，清空重下"
+            rm -f "$ZIP.part"
+        else
+            echo "[fetch] 第 $i 轮: 连接中断，保留 .part 续传"
+        fi
+        sleep 3
+    done
+    [ "$ok" = 1 ] || { echo "[fetch] ERROR: 多次尝试后仍失败（可设 KMH_IMAGE_URL 指向镜像站点）"; exit 1; }
 fi
 
 echo "[fetch] 校验 sha256 ..."
