@@ -110,8 +110,9 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 （DDR 0x80000000）→ 串口抓包 → `make reset_cpu`。AM 镜像入口固定为 `0x80000000`
 （`loader64.ld`），栈在 1GB RAM 区顶部，板载 8GB DDR 足够。
 
-判据：`smoke/fft*` 要求 `EXT instruction demo: PASS` 且无 `Mismatch`；
-`mimo*` 要求 `MIMO_VALIDATE_PASS` 与 `MIMO_DONE`。
+判据：`smoke`/`fft-ext-*` 要求 `EXT instruction demo: PASS` 且 `CHECK: PASS`；
+`fft-scalar-*` 要求 `CHECK: PASS`；`mimo*` 要求 `MIMO_VALIDATE_PASS` 与 `MIMO_DONE`；
+出现 `Mismatch`/`CHECK: FAIL`/`MIMO_VALIDATE_FAIL` 即判失败。
 
 ### 软件侧注意事项
 

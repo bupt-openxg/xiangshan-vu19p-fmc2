@@ -66,15 +66,18 @@ echo "==========================="
 fail=0
 case "$KEY" in
     smoke)
-        grep -q "EXT instruction demo: PASS" "$LOG" || fail=1 ;;
-    fft*)
         grep -q "EXT instruction demo: PASS" "$LOG" || fail=1
-        grep -q "points)" "$LOG" || fail=1 ;;
+        grep -q "CHECK: PASS" "$LOG" || fail=1 ;;
+    fft-ext*)
+        grep -q "EXT instruction demo: PASS" "$LOG" || fail=1
+        grep -q "CHECK: PASS" "$LOG" || fail=1 ;;
+    fft-scalar*)
+        grep -q "CHECK: PASS" "$LOG" || fail=1 ;;
     mimo*)
         grep -q "MIMO_VALIDATE_PASS" "$LOG" || fail=1
         grep -q "MIMO_DONE" "$LOG" || fail=1 ;;
 esac
-grep -qE "Mismatch|EXT instruction demo: FAIL|MIMO_VALIDATE_FAIL|vxsat mismatch" "$LOG" && fail=1
+grep -qE "Mismatch|EXT instruction demo: FAIL|CHECK: FAIL|MIMO_VALIDATE_FAIL|vxsat mismatch|rotpair demo: FAIL" "$LOG" && fail=1
 
 if [ "$fail" = 0 ]; then
     echo "结果: PASS（$KEY）"

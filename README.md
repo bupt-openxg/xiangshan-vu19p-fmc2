@@ -137,9 +137,9 @@ flows/05_program_fpga.sh     # 期望: End of startup status: HIGH
 flows/06_run_hello.sh        # 期望串口: Hello, XiangShan! (MinimalConfig on PHINE PD-VU19P, 115200 8N1)
 flows/07_run_linux.sh        # 期望: OpenSBI 横幅 → Linux 日志 → "#" 提示符 (buildroot shell)
 # xvbbp 分支（无 Linux）：
-flows/10_run_xvbbp.sh smoke          # 期望: EXT instruction demo: PASS
-flows/10_run_xvbbp.sh fft-ext-1024   # EXT demo PASS + FFT 校验输出，无 Mismatch
-flows/10_run_xvbbp.sh mimo-ext-zf4   # MIMO_VALIDATE_PASS + MIMO_DONE
+flows/10_run_xvbbp.sh smoke          # 期望: EXT instruction demo: PASS + CHECK: PASS
+flows/10_run_xvbbp.sh fft-ext-1024   # 期望: EXT demo PASS + CHECK: PASS（scalar 后端只要求 CHECK: PASS）
+flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望: MIMO_VALIDATE_PASS + MIMO_DONE
 ```
 - 串口参数：**115200 8N1**；设备为 FT232R（`/dev/ttyUSB*`，用
   `udevadm info -q property -n <dev> | grep ID_MODEL` 甄别）
