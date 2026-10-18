@@ -110,7 +110,7 @@ ReConstruct/
 | 依赖集成（flows/02）| ✅ 上游香山 @`0a150819` 浅拉 + 11 顶层/3 嵌套 submodule + yunsuan 包固定 + 本地提交（工作树干净）+ nexus-am/riscv-xvbbp/env-scripts 全部就绪 |
 | RTL 生成（flows/03）| ✅ 1821 文件；模拟器残留检查通过；ClockGate 透传；生成 RTL 含 `io_isComp/io_isConj`（VIMac64bStage1/VIMacU），确认扩展逻辑进入网表 |
 | FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 3 个 AM 板级补丁 |
-| 本机综合/比特流（flows/04）| ⏳ 进行中（15GB RAM，预计受内存限制；详见 `docs/xvbbp.md`）|
+| 本机综合/比特流（flows/04）| ✅ **综合成功**：2h06m，0 errors / 0 critical warnings，峰值 31.9GB（15GB RAM + 128GB swap）；⏳ 实现/比特流进行中 |
 | 上板（flows/05/06/10）| ⏳ 待比特流 |
 
 ### kmh-v2 分支（2026-10-17 全链实测）

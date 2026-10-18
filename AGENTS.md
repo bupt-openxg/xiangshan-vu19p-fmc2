@@ -101,7 +101,8 @@ vivado -mode tcl -source tools/read_probes.tcl   # 读全部 VIO 探针
   nexus-am/riscv-xvbbp/env-scripts 全部就绪。
 - ✅ flows/03：1821 个 RTL 文件，残留检查通过；生成 RTL 含 `io_isComp/io_isConj`。
 - ✅ flows/09：官方 7 个代表镜像（smoke / FFT ext·scalar / MIMO ext·scalar）离线构建通过。
-- ⏳ flows/04 本机综合（15GB RAM，预计受限）与上板（flows/05/06/10）。
+- ✅ flows/04 本机综合：2h06m，0 errors / 0 critical，峰值 31.9GB（15GB RAM + 128GB swap 可完成）。
+- ⏳ 实现/比特流与上板（flows/05/06/10）。
 
 ### kmh-v2 分支（2026-10-17 全链实测）
 - ✅ **全链在本仓库内实测通过**（干净环境 → 实板）：依赖/补丁、RTL（与原 RTL

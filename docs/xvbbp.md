@@ -129,9 +129,10 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 | 项 | 状态 |
 |---|---|
 | 核心补丁生成（5 文件、122 行 diff，无无关改动）| ✅ |
+| 依赖集成（flows/02：香山+yunsuan+nexus-am+riscv-xvbbp+env-scripts）| ✅ |
 | AM 工具链（xPack GCC 15 + 3 个补丁）| ✅ 离线构建通过（FFT n16/n1024/n4096、MIMO ext/scalar）|
-| RTL 生成与残留检查 | ⏳ |
-| 本机综合 | ⏳（预计受 15GB RAM 限制）|
+| RTL 生成与残留检查（flows/03）| ✅ 1821 文件；残留检查通过；`io_isComp/io_isConj` 已在 VIMac64bStage1/VIMacU |
+| 本机综合（flows/04）| ✅ **综合成功**（2h06m，0 errors / 0 critical warnings，峰值 31.9GB；15GB RAM + 128GB swap 可完成）；⏳ 实现/比特流进行中 |
 | 板上 Hello 回归 | ⏳ |
 | 板上 7 指令冒烟 / FFT / MIMO | ⏳ |
 
