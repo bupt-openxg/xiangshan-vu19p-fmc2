@@ -1,12 +1,13 @@
-# ReConstruct — 香山昆明湖（MinimalConfig）部署到 PHINE PD-VU19P-2-LSI SOLO v3
+# ReConstruct — 香山昆明湖 V3（MinimalConfig）部署到 PHINE PD-VU19P-2-LSI SOLO v3
 
-把香山昆明湖处理器（MinimalConfig 单核）**从零复现**到 PHINE PD-VU19P 开发板：
+把香山昆明湖 **V3**（`kunminghu-v3` @ `893e158`，MinimalConfig 单核）**从零复现**到 PHINE PD-VU19P 开发板：
 生成 RTL → Vivado 2024.2 综合/实现出比特流 → 上板运行**裸机 Hello World**（串口输出）
 与**官方 Linux 内存镜像**（OpenSBI → 内核 → buildroot shell）。
 
 **全部板卡操作经 JTAG + VIO/TCL 完成，不使用板上任何按键/开关，不依赖引脚上下拉。**
 
-- 依赖（香山源码 / env-scripts）由脚本克隆到 `third_party/` 并应用补丁系列，**不使用 git submodule**
+- 依赖（香山源码 / env-scripts）由脚本克隆到 `third_party/` 并应用补丁系列，**不使用 submodule 管理本仓库依赖**
+- V2 的完整实测记录（含 Linux 启动）在 `kmh-v2` 分支；本分支为 V3（Linux 镜像待后续，见 `docs/v3-upgrade.md`）
 - 环境（JDK/mill/riscv 工具链等）全部本地化到本仓库 `tools/`，**不需要 sudo**
 - 上板全流程经 `flows/` 一键脚本驱动，串口统一 **115200 8N1**
 
@@ -18,7 +19,7 @@
 |---|---|
 | 硬件 | PHINE PD-VU19P-2-LSI **SOLO v3** 板；FMC2 槽 + UV-FMCH-PDDR4DME 子卡 + 1Rx8 (单 rank) DDR4 SODIMM；AMD/JTAG 下载线（接 **CN10**）；串口适配器（FT232R，接后面板 **User RJ45** 口）|
 | 板卡配置 | AEConsole 配 **VADJ = 1.2V**；PLL 输出 **GC02=80MHz**（DDR 参考）、**GC04=25MHz**（CPU 系统时钟）、**GC06=1MHz**（RTC）——见 [docs/board-setup.md](docs/board-setup.md) |
-| 软件 | Linux x86_64；**Vivado 2024.2**（含 license）；`git curl python3 unzip dpkg-deb`；磁盘 **≥80GB**；**swap ≥32GB**（综合峰值内存 ~30GB）|
+| 软件 | Linux x86_64；**Vivado 2024.2**（含 license）；`git curl python3 unzip dpkg-deb`；磁盘 **≥150GB**；**构建 V3 需 RAM ≥64GB（推荐 128GB）**，swap ≥64GB 辅助（15GB 机器实测 128GB swap 也只是磁盘抖动停滞）|
 | 系统依赖 | Ubuntu 24.04(noble) 推荐（工具链 deb 与版本对齐）；其他发行版亦可（交叉工具链取本发行版版本）|
 
 ## 二、快速开始（三阶段）

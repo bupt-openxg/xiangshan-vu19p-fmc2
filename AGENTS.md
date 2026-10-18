@@ -5,10 +5,11 @@
 
 ## 这是什么
 
-**ReConstruct**：把香山昆明湖（Kunminghu，MinimalConfig 单核）从零复现到
-**PHINE PD-VU19P-2-LSI SOLO v3** 开发板 —— 生成 RTL → Vivado 2024.2 出比特流 →
-上板运行**裸机 Hello World** 与**官方 Linux 内存镜像**（OpenSBI → 内核 → buildroot shell）。
+**ReConstruct**：把香山昆明湖 **V3**（`kunminghu-v3` @ `893e158`，MinimalConfig 单核）
+从零复现到 **PHINE PD-VU19P-2-LSI SOLO v3** 开发板 —— 生成 RTL → Vivado 2024.2
+出比特流 → 上板运行**裸机 Hello World**（Linux 待后续，V3 无官方镜像，见 `docs/v3-upgrade.md`）。
 **全部板卡操作经 JTAG + VIO/TCL，不使用板上任何按键/开关。**
+V2 的完整实测记录（含 Linux 启动）在 `kmh-v2` 分支。
 
 ## 黄金规则（违反会白白浪费数小时）
 
@@ -17,8 +18,8 @@
    或 `flows/` 一键脚本。
 2. **串口一律 115200 8N1，且 `stty` 必须显式 `-echo`**（GNU `stty raw` 不会关 echo；
    否则主机行规程把 FPGA 输出回写给 FPGA，Linux 表现为 `ttyS0: input overrun`、
-   init/shell 反复被打断）。运行 Linux 必须用时钟修正版镜像（`flows/07` 自动生成；
-   手工跑时**勿**直接把 `sw/linux/data.txt` 灌进 DDR）。
+   init/shell 反复被打断）。V2 分支运行 Linux 必须用时钟修正版镜像（`flows/07` 自动生成）。
+   V3 无官方 Linux 镜像，Linux 暂缓。
 3. **不要删除 Vivado 工程目录**（`third_party/env-scripts/fpga_diff/fpga_vivado_kmh-nodiff/`）；
    构建中断后用 `tools/rerun_bitstream.sh` 重置重跑。
 4. **JTAG 同一时刻只允许一个 Vivado 会话**。
@@ -35,8 +36,10 @@
 
 | 项 | 值 |
 |---|---|
-| 香山 commit | `4b9ddb8a6311bff6f5e29cb3722d1f4236d66292` |
-| env-scripts | 基线 `876f39e4cf690745a3951ac6c06ce5475d7d4f16` + `patches/env-scripts/` 12 个补丁 |
+| 香山 commit | V3：`893e1580b705d81f113c30c7a05734e09a08050e`（kunminghu-v3 @ 2026-10-16；V2 在 kmh-v2 分支为 `4b9ddb8a`）|
+| env-scripts | 基线 `876f39e4cf690745a3951ac6c06ce5475d7d4f16` + `patches/env-scripts/` 13 个补丁 |
+| 工具链 | mill 按 `XiangShan/.mill-version` 自动选择（V3 = 0.12.17 官方启动器；V2 = 0.12.3 自包含 jar）；JDK 21 |
+| 构建机内存 | **RAM ≥64GB（推荐 128GB）**：V3 stock MinimalConfig 综合 elaboration 工作集 ~110GB+；15GB 机器即使 128GB swap 也只抖动停滞（`flows/00`/`tools/setup/03-swap.sh` 会检查）|
 | FPGA 器件 | `xcvu19p-fsva3824-1-e`（Vivado 2024.2，license 必需）|
 | 板卡时钟 | GC02=80MHz(DDR 参考) · GC04=25MHz(CPU) · GC06=1MHz(RTC)；VADJ=1.2V |
 | 内存/UART | DDR 载入 `0x80000000`；UART16550 `0x310B0000`（分频 14 → ≈111.6kbps ≈ 115200）；裸机栈顶 `0x81000000` |
@@ -46,14 +49,14 @@
 
 ```
 flows/         ★ 编号流程脚本 00..08（幂等、失败即停、依序执行完成全流程）
-patches/       ★ 对上游 env-scripts 的 12 个移植补丁（git am 系列）+ 逐条说明
-third_party/   (gitignored) flows/02 拉取：XiangShan@4b9ddb8（浅）+ env-scripts(main+补丁)
+patches/       ★ 对上游 env-scripts 的 13 个移植补丁（git am 系列）+ 逐条说明
+third_party/   (gitignored) flows/02 拉取：XiangShan V3@893e158（浅）+ env-scripts(main+补丁)
 hw/            pinmaps/（板卡 IO 与 FMC2-DDR4 引脚表 CSV）· diag/（板卡诊断设计）· README
 sw/            baremetal/（裸机源码+Makefile，配方与上板实测产物逐字节一致）· linux/（官方镜像获取+DTB 时钟修正）
 tools/         env.sh（环境入口）· setup/00..07（工具链本地化安装，无需 sudo）· checks/（RTL 残留检查）
                · run_hello.sh / run_linux.sh / prog_bitstream.tcl / read_probes.tcl / patch_*.{py,sh,tcl}
 docs/          run-guide · onboard-runbook · build-log（完整调试史）· board-setup · board-diag
-               · workload-format · rtl-check-report · evidence/（串口实录等上板证据）
+               · workload-format · rtl-check-report · v3-upgrade.md（V2→V3 差异/决策）· evidence/
 build/         (gitignored) 比特流 fpga_top_debug.bit/.ltx、日志、RTL 检查报告
 .agents/skills/ 面向 Agent 的技能（见下）
 ```
@@ -61,7 +64,7 @@ build/         (gitignored) 比特流 fpga_top_debug.bit/.ltx、日志、RTL 检
 ## 常用命令
 
 ```bash
-# 构建链（首次约 30min + RTL 20-40min + 比特流 ~7h）
+# 构建链（首次约 30min + V3 RTL 30-60min + 综合 2-3h + 实现 5-8h；swap 需 ≥128GB）
 flows/00_host_check.sh && flows/01_setup_toolchain.sh && flows/02_clone_deps.sh
 flows/03_gen_rtl.sh && flows/04_build_bitstream.sh
 # 上板（板卡就绪后，约 5 分钟）
@@ -80,14 +83,14 @@ vivado -mode tcl -source tools/read_probes.tcl   # 读全部 VIO 探针
 | `baremetal-riscv-hello-first-light` | 裸机 first-light 五坑：栈/build-id/objcopy 段过滤/静态链接/UART 分频 + 负载格式与复现比对 |
 | `git-submodule-shallow-clone-traps` | submodule 浅克隆三类陷阱、POSIX foreach、范围最小化、离线镜像验证（通用知识，非本板专属）|
 
-## 验证状态（2026-10-17；详见 README §四）
+## 验证状态（2026-10-18，kmh-v3 分支）
 
-- ✅ **全链在本仓库内实测通过**（干净环境 → 实板）：依赖/补丁、RTL（与原 RTL
-  1578/1579 逐字节一致）、综合（1h51m，0 errors/0 critical）、布线（WNS +0.469ns，
-  与原构建一致）、比特流、烧录、裸机 Hello、官方 Linux（OpenSBI → 内核 → buildroot
-  shell 可交互，`uname -a`/`ls /` 通过）。实录见 `docs/evidence/*freshbuild*`。
-- ✅ 新克隆端到端烟测（GitHub clone → flows/00 → flows/02 → 12 补丁 `git am`）。
-- ⚠️ 上板实测中发现并修复的交付缺陷：`setup/02-mill.sh`（全新环境缺 launcher）、
-  `prog_bitstream.tcl`/`read_probes.tcl`（Tcl 误用 bash 展开）、`flows/05`（缺成功校验）、
-  `run_hello.sh`/`run_linux.sh`（stty 未关 echo → 串口自环回）。
-- ▶️ 未重跑：`flows/08` 板卡诊断（原工程实测通过）；`setup/01-02` 的下载路径（URL 未变）。
+- ✅ V2 全链实测（kmh-v2 分支）：综合/布线（WNS +0.469ns）/比特流/烧录/Hello/Linux
+  交互 shell 全部通过，证据在 `docs/evidence/*freshbuild*`。
+- ✅ V3（本分支）：依赖拉取与 submodule 对齐、RTL 生成（1895 文件）+ 残留检查 + 后处理、
+  工程创建（0 ERROR，端口自动适配生效）。
+- ⏳ V3 综合（实测 swap 峰值 ~82GB，128GB 下正常）、实现/比特流、上板 Hello：随实测更新
+  README §四。
+- ⚠️ 上板实测中发现并修复的交付缺陷（V2 阶段）：`setup/02-mill.sh`、Tcl 里的 bash 展开、
+  `flows/05` 缺成功校验、`stty` 未关 echo（串口自环回）。V3 阶段新增的适配见
+  `docs/v3-upgrade.md` 与补丁 0013。

@@ -1,14 +1,16 @@
 ---
 name: xiangshan-vu19p-bringup
-description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 比特流）时使用。覆盖 flows/ 步骤编排、submodule 浅拉取陷阱与自动修复、RTL 生成的强制重跑与可复现性要点。触发词：构建、复现、flow、make verilog、RTL、bitstream、submodule、clone、fudian、gitDirty。
+description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 比特流）时使用（Kunminghu V2/V3 皆适用）。覆盖 flows/ 步骤编排、submodule 浅拉取陷阱与自动修复、V2/V3 差异（mill 版本/submodule 集合/XSTop 端口/生成物结构）、RTL 强制重跑、综合内存（128GB swap）与可复现性。触发词：构建、复现、flow、make verilog、RTL、bitstream、submodule、clone、fudian、gitDirty、V3、kunminghu-v3、OOM、swap。
 ---
 
 # 香山 VU19P 从零构建（本仓库视角）
 
 ## 不可变事实（动手前先确认上游是否有变）
 
-- 香山 commit：`4b9ddb8a6311bff6f5e29cb3722d1f4236d66292`；env-scripts 基线：`876f39e4cf690745a3951ac6c06ce5475d7d4f16`，其上 `git am` 应用 `patches/env-scripts/` 的 12 个补丁。
+- 香山 commit：V3 = `893e1580b705d81f113c30c7a05734e09a08050e`（kunminghu-v3，2026-10-16；V3 未冻结、无 tag）；V2 = `4b9ddb8a`（kmh-v2 分支）。env-scripts 基线：`876f39e4cf690745a3951ac6c06ce5475d7d4f16`，其上 `git am` 应用 `patches/env-scripts/` 的 13 个补丁（含 0013 V3 端口适配）。
 - 器件 `xcvu19p-fsva3824-1-e`；Vivado 2024.2；板卡时钟（AEConsole）：GC02=80MHz(DDR 参考)、GC04=25MHz(CPU)、GC06=1MHz(RTC)，VADJ=1.2V。
+- 工具链：mill 按 `XiangShan/.mill-version` 自动选择（V3=0.12.17 官方启动器；V2=0.12.3 自包含 jar）；JDK 21。
+- **构建机内存**：V2 15GB 笔记本可完成；**V3 stock MinimalConfig 需 ≥64GB 物理内存**（elaboration 工作集 ~110GB+；15GB RAM + 128GB swap 实测磁盘抖动停滞，63GB swap 时 OOM）。swap 不能替代物理内存。
 - 内存地址：DDR 载入点 `0x80000000`、UART16550 `0x310B0000`、裸机栈顶 `0x81000000`。
 
 ## 流程编排（flows/00..08，幂等，失败即停）
@@ -23,7 +25,10 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 
 ## submodule 陷阱（flows/02 已自动处理；手工操作必须知道）
 
-1. **只初始化构建必需的**：顶层 10 个 + `rocket-chip/{cde,hardfloat}` + `openLLC/openNCB`（依据 XiangShan `build.sc` 的 `millSourcePath` 引用）。上游 `--recursive` 会拖入几十 GB 仿真/测试依赖并常因网络中断。体积对照：精简 **156MB** vs 递归 **1.7GB**。
+1. **只初始化构建必需的**（集合随版本变化，以 build 文件的 `millSourcePath` 为准）：
+   - V2（`build.sc`）：顶层 10 个 + `rocket-chip/{cde,hardfloat}` + `openLLC/openNCB`；
+   - V3（`build.mill`）：顶层 9 个（rocket-chip、difftest、ready-to-run、utility、yunsuan、ChiselAIA、ChiselIOPMP、XSCache、OpenIOMMU）+ `rocket-chip/{cde,hardfloat}` + `XSCache/{OpenNCB,ZhuJiang}`。
+   上游 `--recursive` 会拖入几十 GB 仿真/测试依赖并常因网络中断。
 2. **`--depth 1` 会把 submodule 停在默认分支顶端**（≠ 父仓库 gitlink 记录的 SHA）。症状：`make verilog` 编译期报 `not found: object fudian` 一类错误。
 3. **默认分支顶端恰好等于记录 SHA 时，submodule--helper 跳过 checkout，留下"HEAD 正确但工作树为空"的目录**（实测 fudian、aia 命中）。`git submodule status` 看不出（前缀是空格）。
 4. flows/02 的 `verify_submodules()` 会自动修复 2、3 两类（按 `$sha1` fetch + `git reset --hard`；空工作树检测）——**改动它时保留修复循环**。
@@ -32,7 +37,9 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 
 ## RTL 生成
 
-- `cd third_party/XiangShan && make verilog CONFIG=MinimalConfig JVM_XMX=20G`；产物 `build/rtl`（1579 文件）。flows/03 附带模拟器残留检查（`tools/checks/rtl_check.sh`，DPI 须被 `ifndef SYNTHESIS` 门控）与后处理（`tools/patch_rtl.sh`：ClockGate 透传 / URAM ram_style / 移除 DummyDPI 例化链）。
+- `cd third_party/XiangShan && make verilog CONFIG=MinimalConfig JVM_XMX=20G`；产物 `build/rtl`（V2: 1579 文件；V3: 1895 文件 / 1.3GB）。flows/03 附带模拟器残留检查（`tools/checks/rtl_check.sh`）与后处理（`tools/patch_rtl.sh`）。
+  - V3 生成物差异：`ClockGate.sv`（不是 .v）；无 `array_*.v`（SRAM 模板）；`DummyDPICWrapper_*` 模块定义存在且 DPI import 已被 `ifndef SYNTHESIS` 门控 → 后处理**保留**例化（V2 则删除悬空例化）。
+  - 工程创建时 env-scripts 会自动探测 XSTop 端口（V3 无 `io_riscv_halt_0`/`dma_*`）并选择 wrapper 分支；日志应出现 `io_riscv_halt_0 absent ... WFI as halt indicator`。
 - **make 会因产物已存在而跳过重生成**：要强制重生成先 `rm -rf build/rtl`，否则 `patch_rtl.sh` 打在旧产物上（表现为"移除 0 处"）。
 - RTL 会内嵌 `gitDirty`（`NewCSR.sv` 的 `wire gitDirty`）与 `git diff` 注释（`XSTop.sv`）：**构建前保证 third_party/XiangShan 树干净（含全部 submodule）**，否则产出带 dirty 标记。清嵌套污染：`git -C <sub> submodule deinit -f <nested>`（曾因递归试验把 coupledL2 嵌套拉脏，逐层 ` m` 上报到顶层）。
 - 可复现性基线：干净树下重建的 RTL 与"上板验证过的原构建"逐字节比对 **1578/1579 一致**；唯一差异 `XSTop.fir` 是 FIRRTL 中间文件的源码定位器绝对路径字符串（345 万处，不参与综合）。
