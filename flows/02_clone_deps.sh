@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 02 拉取第三方依赖并应用移植补丁（不使用 git submodule）
-#   third_party/XiangShan     香山源码 @4b9ddb8（浅拉取单个 commit，约数百 MB）
+# 02 拉取第三方依赖并应用移植补丁（不使用 git submodule 管理本仓库依赖）
+#   third_party/XiangShan     Kunminghu V3 源码 @893e158（浅拉取单个 commit）
 #   third_party/env-scripts   上游 main → checkout 补丁基线 → git am patches/env-scripts/*.patch
+# 说明: 香山 V3 仍在使用上游自己的 git submodule（difftest/XSCache 等），由本脚本初始化。
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,46 +11,52 @@ source "$ROOT/tools/env.sh" >/dev/null 2>&1 || true
 TP="$ROOT/third_party"
 mkdir -p "$TP"
 
-XS_URL="https://github.com/OpenXiangShan/XiangShan.git"
-XS_SHA="4b9ddb8a6311bff6f5e29cb3722d1f4236d66292"
-ES_URL="https://github.com/OpenXiangShan/env-scripts.git"
+XS_URL="${XS_URL:-https://github.com/OpenXiangShan/XiangShan.git}"   # 网络受限时可改 SSH: git@github.com:OpenXiangShan/XiangShan.git
+XS_SHA="893e1580b705d81f113c30c7a05734e09a08050e"                    # Kunminghu V3 (kunminghu-v3 @ 2026-10-16)
+ES_URL="${ES_URL:-https://github.com/OpenXiangShan/env-scripts.git}"
 ES_BASE="876f39e4cf690745a3951ac6c06ce5475d7d4f16"
 
 # ---------- XiangShan（香山源码，生成 RTL 用） ----------
 if [ -d "$TP/XiangShan/.git" ]; then
-    echo "[02] XiangShan 已存在，跳过克隆"
+    echo "[02] XiangShan 已存在，检查版本"
 else
     echo "[02] 克隆 XiangShan @${XS_SHA:0:8}（浅拉取单 commit）"
     mkdir -p "$TP/XiangShan"
     git -C "$TP/XiangShan" init -q
     git -C "$TP/XiangShan" remote add origin "$XS_URL"
+fi
+got=$(git -C "$TP/XiangShan" rev-parse HEAD 2>/dev/null || echo none)
+if [ "$got" != "$XS_SHA" ]; then
+    echo "[02] 检出目标 commit（当前 ${got:0:8} -> ${XS_SHA:0:8}）"
     git -C "$TP/XiangShan" fetch --depth 1 origin "$XS_SHA"
     git -C "$TP/XiangShan" checkout -q FETCH_HEAD
 fi
 got=$(git -C "$TP/XiangShan" rev-parse HEAD)
 [ "$got" = "$XS_SHA" ] || { echo "[02] ERROR: XiangShan commit 不符: $got"; exit 1; }
-# ---- 上游 submodule：只初始化 RTL 构建（make verilog / build.sc）真正需要的部分 ----
-# 顶层 9 个（rocket-chip/difftest/huancun/fudian/utility/yunsuan/coupledL2/openLLC/src/main/resources/aia）
-# 是 build.sc 的 mill 源码依赖，全部必需。
-# 嵌套层只有 3 个被 build.sc 直接引用为源码目录（其余都是仿真/测试用，几十 GB 且常因网络失败）：
-#   rocket-chip/cde, rocket-chip/hardfloat  ->  build.sc:22-24,94-108
-#   openLLC/openNCB                          ->  build.sc:150-152
+
+# ---- 上游 submodule：只初始化构建真正需要的部分 ----
+# 顶层 9 个（rocket-chip/difftest/ready-to-run/utility/yunsuan/ChiselAIA/ChiselIOPMP/
+# XSCache/OpenIOMMU）是 build.mill 的 mill 源码依赖，全部必需。
+# 嵌套层只有 4 个被 build.mill 直接引用为源码目录（其余都是仿真/测试用，几十 GB 且常因网络失败）：
+#   rocket-chip/cde, rocket-chip/hardfloat  ;  XSCache/OpenNCB, XSCache/ZhuJiang
 needs_sm=0
-[ -f "$TP/XiangShan/difftest/build.sc" ]             || needs_sm=1
-[ -d "$TP/XiangShan/rocket-chip/cde/cde" ]           || needs_sm=1
+[ -f "$TP/XiangShan/difftest/build.sc" ]              || needs_sm=1
+[ -d "$TP/XiangShan/rocket-chip/cde/cde" ]            || needs_sm=1
 [ -d "$TP/XiangShan/rocket-chip/hardfloat/hardfloat" ] || needs_sm=1
-[ -f "$TP/XiangShan/openLLC/openNCB/build.sc" ]      || needs_sm=1
+[ -f "$TP/XiangShan/XSCache/OpenNCB/build.sc" ]       || needs_sm=1
+[ -f "$TP/XiangShan/XSCache/ZhuJiang/build.sc" ]      || needs_sm=1
 if [ "$needs_sm" = 1 ]; then
     echo "[02] 初始化 XiangShan 顶层 submodule（--init --depth 1）"
     git -C "$TP/XiangShan" submodule update --init --depth 1
-    echo "[02] 初始化 3 个被 build.sc 引用的嵌套 submodule"
+    echo "[02] 初始化 4 个被 build.mill 引用的嵌套 submodule"
     git -C "$TP/XiangShan/rocket-chip" submodule update --init --depth 1 cde hardfloat
-    git -C "$TP/XiangShan/openLLC"    submodule update --init --depth 1 openNCB
+    git -C "$TP/XiangShan/XSCache"     submodule update --init --depth 1 OpenNCB ZhuJiang
 fi
+
 # 校验并修复（两种实测过的 submodule 陷阱都会让后续 RTL 编译报 "not found: object xxx"）:
 #   a) --depth 1 抓取可能把 submodule 停在默认分支顶端而非父仓库 gitlink 记录的 commit;
 #   b) 若默认分支顶端恰好等于记录 commit, submodule--helper 会跳过 checkout, 留下
-#      "HEAD 正确但工作树为空" 的目录（实测 fudian/aia 命中）。
+#      "HEAD 正确但工作树为空" 的目录（V2 实测 fudian/aia 命中）。
 verify_submodules() {
     local repo="$1" label="$2"
     # 注意: foreach 的内嵌脚本由 /bin/sh (dash) 执行, 不能用 ${var:0:8} 等 bash 语法
@@ -68,7 +75,7 @@ verify_submodules() {
 }
 verify_submodules "$TP/XiangShan" "XiangShan"
 verify_submodules "$TP/XiangShan/rocket-chip" "rocket-chip"
-verify_submodules "$TP/XiangShan/openLLC" "openLLC"
+verify_submodules "$TP/XiangShan/XSCache" "XSCache"
 echo "[02] XiangShan OK: ${got:0:8}（submodule 已就绪且 SHA 对齐）"
 
 # ---------- env-scripts（上游 FPGA 流程）+ 移植补丁 ----------
@@ -86,7 +93,7 @@ fi
 if git log --format=%s -1 | grep -q '^phine:'; then
     echo "[02] env-scripts 移植补丁已应用，跳过"
 else
-    echo "[02] checkout 补丁基线 ${ES_BASE:0:8} 并应用 12 个补丁"
+    echo "[02] checkout 补丁基线 ${ES_BASE:0:8} 并应用补丁系列"
     git checkout -q "$ES_BASE"
     git -c user.name="ReConstruct" -c user.email="reconstruct@local" \
         am -q "$ROOT"/patches/env-scripts/*.patch
@@ -97,4 +104,4 @@ echo
 echo "==== 依赖就绪 ===="
 echo "  XiangShan   : $(git -C "$TP/XiangShan" rev-parse --short HEAD)  ($TP/XiangShan)"
 echo "  env-scripts : $(git -C "$TP/env-scripts" rev-parse --short HEAD)  ($TP/env-scripts)"
-echo "下一步: flows/03_gen_rtl.sh（生成 RTL，约 20-40 分钟）"
+echo "下一步: flows/03_gen_rtl.sh（生成 RTL，约 30-60 分钟）"
