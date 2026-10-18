@@ -10,6 +10,10 @@
 - 环境（JDK/mill/riscv 工具链等）全部本地化到本仓库 `tools/`，**不需要 sudo**
 - 上板全流程经 `flows/` 一键脚本驱动，串口统一 **115200 8N1**
 
+> **分支**：`kmh-v2`（本 README 主体：香山 2025-02 基线，含裸机 + Linux）；
+> `kmh-v3`（V3 升级，暂缓）；`xvbbp`（上游香山 2026-01 基线 + XVBBP 7 条自定义向量指令
+> + FFT/MIMO 裸机负载，**只做裸机、不涉及 Linux**，见 [docs/xvbbp.md](docs/xvbbp.md)）。
+
 ---
 
 ## 一、前置要求
@@ -50,6 +54,24 @@ flows/06_run_hello.sh            # 裸机 Hello：串口 115200 输出 "Hello, X
 flows/07_run_linux.sh            # 官方 Linux 镜像（自动下载+时钟修正）→ buildroot shell
 ```
 
+### D. XVBBP 分支（仅 xvbbp；裸机 + FFT/MIMO）
+
+```bash
+flows/02_clone_deps.sh           # 香山@0a150819 + 5 文件补丁 + yunsuan@b4a62448 + nexus-am
+flows/03_gen_rtl.sh && flows/04_build_bitstream.sh
+flows/05_program_fpga.sh && flows/06_run_hello.sh
+flows/09_build_xvbbp_sw.sh       # 官方 FFT/MIMO 代表集 → build/xvbbp/
+flows/10_run_xvbbp.sh smoke      # 七指令冒烟：期望 "EXT instruction demo: PASS"
+flows/10_run_xvbbp.sh mimo-ext-zf4
+```
+
+- 该分支**不包含 Linux**；核心侧只加了 5 个文件（见 `patches/xiangshan-xvbbp/`），
+  运算数据通路在 `GaryCAICHI/YunSuan@b4a62448` 这个 Scala 包里（flows/02 固定 SHA）。
+- 软件必须用 xPack GCC 15（`tools/setup/08`，flows/01 自动安装）；AM 板级补丁见
+  `patches/nexus-am/`（UART 25MHz / mstatus.VS / lp64d）。
+- 8-wide 后期线路综合工作集约 90–110GB：**15GB 机器预计只能 swap 抖动**，建议构建机
+  RAM ≥64GB（128GB 推荐）。
+
 （可选）板卡诊断：`flows/08_board_diag.sh` —— 独立小工程（~20 分钟），
 分钟级验证四路时钟/复位引脚电平/复位逻辑/串口链路，排障首选（见 [docs/board-diag.md](docs/board-diag.md)）。
 
@@ -57,23 +79,41 @@ flows/07_run_linux.sh            # 官方 Linux 镜像（自动下载+时钟修�
 
 ```
 ReConstruct/
-├── flows/                 ★ 编号流程脚本 00..08（幂等, 依序执行即完成全流程）
-├── patches/env-scripts/   ★ 对上游 env-scripts 的 12 个移植补丁 + README(逐条说明)
+├── flows/                 ★ 编号流程脚本 00..10（幂等, 依序执行即完成全流程）
+├── patches/               ★ 三个补丁系列（各自的 README 记录来源/基线/再生方法）
+│     ├── env-scripts/      板卡移植 12 个补丁
+│     ├── xiangshan-xvbbp/  XVBBP 核心 5 文件补丁（xvbbp 分支）
+│     └── nexus-am/         FFT/MIMO 板级 3 个补丁（xvbbp 分支）
 ├── third_party/           依赖克隆（flows/02 拉取；gitignored）
-│     ├── XiangShan/        香山源码 @4b9ddb8
-│     └── env-scripts/      上游 main + 本仓库补丁（= 移植后的 FPGA 工程）
+│     ├── XiangShan/        香山源码（kmh-v2: @4b9ddb8；xvbbp: 0a150819+补丁+yunsuan@b4a62448）
+│     ├── env-scripts/      上游 main + 本仓库补丁（= 移植后的 FPGA 工程）
+│     ├── nexus-am/         (xvbbp) AM fork + 板级补丁
+│     └── riscv-xvbbp/      (xvbbp) 冻结的 FFT/MIMO 软件包
 ├── hw/                    硬件：pinmaps/(引脚表) · diag/(板卡诊断设计) · README
-├── sw/                    软件负载：baremetal/(裸机源码+Makefile) · linux/(镜像获取与修正) · README
-├── tools/                 工具箱：env.sh(环境入口) · setup/(00..07 工具链安装)
+├── sw/                    软件负载：baremetal/(裸机源码+Makefile) · linux/(镜像获取与修正) · xvbbp/(负载说明)
+├── tools/                 工具箱：env.sh(环境入口) · setup/(00..08 工具链安装)
 │                          · run_hello.sh/run_linux.sh/prog_bitstream.tcl/read_probes.tcl
 │                          · patch_rtl.sh/patch_linux_dtb_clock.py/gen_ddr_xdc.py · checks/
-├── docs/                  文档：run-guide · onboard-runbook · build-log · board-setup
+├── docs/                  文档：run-guide · onboard-runbook · build-log · xvbbp · board-setup
 │                          · board-diag · workload-format · rtl-check-report · evidence/(实测证据)
-├── build/                 (gitignored) 构建产物：fpga_top_debug.bit/.ltx、日志
+├── build/                 (gitignored) 构建产物：fpga_top_debug.bit/.ltx、日志、xvbbp/ 负载
 └── logs/                  (gitignored) 比特流构建日志
 ```
 
 ## 四、已实测状态（重要）
+
+### xvbbp 分支（本轮；裸机 + FFT/MIMO）
+
+| 环节 | 状态 |
+|---|---|
+| 解耦与核心补丁 | ✅ 核心侧增量仅 5 个 Scala 文件（+36/−3）；补丁由 `0a150819..e34d8adb` 精确生成，无无关改动；V 数据通路固定在 `GaryCAICHI/YunSuan@b4a62448` |
+| 依赖集成（flows/02）| ✅ 上游香山 @`0a150819` 浅拉 + 11 顶层/3 嵌套 submodule + yunsuan 包固定 + 本地提交（工作树干净）+ nexus-am/riscv-xvbbp/env-scripts 全部就绪 |
+| RTL 生成（flows/03）| ✅ 1821 文件；模拟器残留检查通过；ClockGate 透传；生成 RTL 含 `io_isComp/io_isConj`（VIMac64bStage1/VIMacU），确认扩展逻辑进入网表 |
+| FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 3 个 AM 板级补丁 |
+| 本机综合/比特流（flows/04）| ⏳ 进行中（15GB RAM，预计受内存限制；详见 `docs/xvbbp.md`）|
+| 上板（flows/05/06/10）| ⏳ 待比特流 |
+
+### kmh-v2 分支（2026-10-17 全链实测）
 
 | 环节 | 状态 |
 |---|---|
@@ -96,6 +136,10 @@ ReConstruct/
 flows/05_program_fpga.sh     # 期望: End of startup status: HIGH
 flows/06_run_hello.sh        # 期望串口: Hello, XiangShan! (MinimalConfig on PHINE PD-VU19P, 115200 8N1)
 flows/07_run_linux.sh        # 期望: OpenSBI 横幅 → Linux 日志 → "#" 提示符 (buildroot shell)
+# xvbbp 分支（无 Linux）：
+flows/10_run_xvbbp.sh smoke          # 期望: EXT instruction demo: PASS
+flows/10_run_xvbbp.sh fft-ext-1024   # EXT demo PASS + FFT 校验输出，无 Mismatch
+flows/10_run_xvbbp.sh mimo-ext-zf4   # MIMO_VALIDATE_PASS + MIMO_DONE
 ```
 - 串口参数：**115200 8N1**；设备为 FT232R（`/dev/ttyUSB*`，用
   `udevadm info -q property -n <dev> | grep ID_MODEL` 甄别）
@@ -117,8 +161,11 @@ flows/07_run_linux.sh        # 期望: OpenSBI 横幅 → Linux 日志 → "#" �
 
 本仓库**不分发**以下内容（由脚本获取或需自行准备）：
 
-- **香山 XiangShan**（`third_party/XiangShan`，脚本克隆 @`4b9ddb8`）—— 遵循其原始许可（MIT）
+- **香山 XiangShan**（`third_party/XiangShan`，脚本克隆；kmh-v2 @`4b9ddb8`，xvbbp @`0a150819`+补丁）—— 遵循其原始许可
 - **OpenXiangShan/env-scripts**（`third_party/env-scripts`，脚本克隆 + 本仓库 `patches/` 补丁）—— Apache-2.0
+- **GaryCAICHI/YunSuan**（xvbbp 的 V 数据通路包，@`b4a62448`）、**GaryCAICHI/nexus-am**（@`9dc5f1e1`）与
+  **bupt-openxg-lab/riscv-xvbbp**（@`c553928`，FFT/MIMO 软件包）—— 各源文件保留原许可；
+  XVBBP 设计与实现归 Cai Chi 等，见 `docs/xvbbp.md` §7
 - **官方 Linux 内存镜像**（`sw/linux/fetch_image.sh` 从 [XiangShan-doc 资源目录](https://github.com/OpenXiangShan/XiangShan-doc/tree/main/docs/integration/resources) 下载，sha256 固定）
 - **PHINE 厂商 BSP**（AEConsole / 原理图 / 引脚表，需向板卡厂商获取；本仓库仅保留派生引脚表 `hw/pinmaps/`）
 - 本仓库自身内容（`flows/`、`tools/`、`docs/`、`hw/diag/`、`sw/baremetal/` 等）**暂未附加 License 文件**，作者将另行决定。
