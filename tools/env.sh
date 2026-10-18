@@ -20,6 +20,14 @@ fi
 export PATH="$TOOLS_ROOT/bin:$PATH"
 export PATH="$TOOLS_ROOT/sysroot/usr/bin:$PATH"
 export LD_LIBRARY_PATH="$TOOLS_ROOT/sysroot/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# nexus-am 的 FFT/MIMO 构建需要 libc 头文件: 编译时加 --sysroot=$RISCV_SYSROOT
+export RISCV_CROSS="${RISCV_CROSS:-riscv64-linux-gnu-}"
+export RISCV_SYSROOT="$TOOLS_ROOT/sysroot"
+# xPack bare-metal GCC 15（FFT/MIMO 的 RVV intrinsic 需要 GCC14+；tools/setup/08 安装）
+_XPACK_DIR="$(ls -d "$TOOLS_ROOT"/xpack-riscv-none-elf-gcc-* 2>/dev/null | sort -V | tail -1)"
+if [ -n "$_XPACK_DIR" ]; then
+    export RISCV_XPACK_PREFIX="$_XPACK_DIR/bin/riscv-none-elf-"
+fi
 
 # ---- mill 包装脚本 (tools/mill/mill) ----
 export PATH="$TOOLS_ROOT/mill:$PATH"
@@ -45,4 +53,4 @@ if [ -z "${XILINXD_LICENSE_FILE:-}" ]; then
     done
 fi
 
-unset _XS_ROOT _JDK_DIR _XILINX_VIVADO _lic
+unset _XS_ROOT _JDK_DIR _XILINX_VIVADO _lic _XPACK_DIR

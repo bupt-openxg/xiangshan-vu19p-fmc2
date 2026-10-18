@@ -1,3 +1,18 @@
+# 补丁系列总览
+
+本目录按**目标上游**分三组：
+
+| 目录 | 目标 | 内容 |
+|---|---|---|
+| `env-scripts/` | `OpenXiangShan/env-scripts` | 板卡移植 12 个补丁（本文下半部分）|
+| `xiangshan-xvbbp/` | `OpenXiangShan/XiangShan` | XVBBP 7 条自定义指令的核心侧支持（5 个 Scala 文件）|
+| `nexus-am/` | `GaryCAICHI/nexus-am` | FFT/MIMO 板级适配（UART 25MHz、mstatus.VS、lp64d ABI）|
+
+`flows/02_clone_deps.sh` 自动拉取对应上游版本并应用全部补丁；各系列的来源与再生命令
+见各自目录的 `README.md`。
+
+---
+
 # env-scripts 移植补丁系列
 
 本目录的 12 个补丁是**本工程对上游 `OpenXiangShan/env-scripts`（fpga_diff 流程）的完整移植改动**：

@@ -1,0 +1,122 @@
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 3f795f8..e202b4c 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -35,6 +35,7 @@ import xiangshan.backend.fu.wrapper.CSRToDecode
+ import xiangshan.backend.decode.isa.CSRs
+ import xiangshan.backend.decode.Zimop._
+ import yunsuan.{FcmpOpCode, MULOpType, VfaluType, VfcvtType, VfmaType, VfmaOpCode}
++import xiangshan.backend.decode.Zvbaseband._
+ 
+ /**
+  * Abstract trait giving defaults and other relevant values to different Decode constants/
+@@ -984,6 +985,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   private val vmaInsts = Seq(
+     VMACC_VV, VMACC_VX, VNMSAC_VV, VNMSAC_VX, VMADD_VV, VMADD_VX, VNMSUB_VV, VNMSUB_VX,
+     VWMACCU_VV, VWMACCU_VX, VWMACC_VV, VWMACC_VX, VWMACCSU_VV, VWMACCSU_VX, VWMACCUS_VX,
++    // xvbbp
++    VSCMACC_VV, VSCMACCCJ_VV,
+   )
+   private val wfflagsInsts = Seq(
+     // opfff
+diff --git a/src/main/scala/xiangshan/backend/decode/Instructions.scala b/src/main/scala/xiangshan/backend/decode/Instructions.scala
+index 0b2f535..4257881 100644
+--- a/src/main/scala/xiangshan/backend/decode/Instructions.scala
++++ b/src/main/scala/xiangshan/backend/decode/Instructions.scala
+@@ -25,3 +25,13 @@ object Zimop {
+   def MOP_R  = BitPat("b1?00??0111???????100?????1110011")
+   def MOP_RR = BitPat("b1?00??1??????????100?????1110011")
+ }
++
++object Zvbaseband{
++  def VSCMUL_VV     = BitPat("b110010???????????000?????1010111")
++  def VSCMULCJ_VV   = BitPat("b110011???????????000?????1010111")
++  def VSCMACC_VV    = BitPat("b110100???????????000?????1010111")
++  def VSCMACCCJ_VV  = BitPat("b110110???????????000?????1010111")
++  def VSCADDCONJ_VV = BitPat("b110111???????????000?????1010111")
++  def VSCADDRQ_VV   = BitPat("b111000???????????000?????1010111")
++  def VSCADDRTQ_VV  = BitPat("b111001???????????000?????1010111")
++}
+diff --git a/src/main/scala/xiangshan/backend/decode/VecDecoder.scala b/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
+index 7360773..b5cd47d 100644
+--- a/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
++++ b/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
+@@ -12,6 +12,7 @@ import xiangshan.backend.fu.FuType
+ import xiangshan._
+ import yunsuan.{VfpuType, VipuType, VimacType, VpermType, VialuFixType, VfaluType, VmoveType, VfmaType, VfdivType, VfcvtType, VidivType, FcmpOpCode}
+ import xiangshan.backend.decode.Zvbb._
++import xiangshan.backend.decode.Zvbaseband._
+ 
+ abstract class VecDecode extends XSDecodeBase {
+   def generate() : List[BitPat]
+@@ -246,6 +247,15 @@ object VecDecoder extends DecodeConstants {
+     VROL_VV         -> OPIVV(FuType.vialuF, VialuFixType.vrol_vv, T, F, F, UopSplitType.VEC_VVV),
+     VROR_VV         -> OPIVV(FuType.vialuF, VialuFixType.vror_vv, T, F, F, UopSplitType.VEC_VVV),
+     VWSLL_VV        -> OPIVV(FuType.vialuF, VialuFixType.vwsll_vv, T, F, F, UopSplitType.VEC_VVW),
++
++    // xvbbp
++    VSCMUL_VV       -> OPIVV(FuType.vimac, VimacType.vscmul, T, F, T, UopSplitType.VEC_VVV),
++    VSCMULCJ_VV     -> OPIVV(FuType.vimac, VimacType.vscmulcj, T, F, T, UopSplitType.VEC_VVV),
++    VSCMACC_VV      -> OPIVV(FuType.vimac, VimacType.vscmacc, T, F, T, UopSplitType.VEC_VVV),
++    VSCMACCCJ_VV    -> OPIVV(FuType.vimac, VimacType.vscmacccj, T, F, T, UopSplitType.VEC_VVV),
++    VSCADDCONJ_VV   -> OPIVV(FuType.vialuF, VialuFixType.vscaddconj, T, F, T, UopSplitType.VEC_VVV),
++    VSCADDRQ_VV     -> OPIVV(FuType.vialuF, VialuFixType.vscaddrq, T, F, T, UopSplitType.VEC_VVV),
++    VSCADDRTQ_VV    -> OPIVV(FuType.vialuF, VialuFixType.vscaddrtq, T, F, T, UopSplitType.VEC_VVV),
+   )
+ 
+   val opivx: Array[(BitPat, XSDecodeBase)] = Array(
+diff --git a/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala b/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
+index 6a30887..d2557b8 100644
+--- a/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
+@@ -13,6 +13,7 @@ import xiangshan.backend.fu.FuType
+ import xiangshan.backend.fu.vector.Bundles._
+ import xiangshan.backend.decode.isa.bitfield.{InstVType, XSInstBitFields, OPCODE7Bit}
+ import xiangshan.backend.decode.Zvbb._
++import xiangshan.backend.decode.Zvbaseband._
+ 
+ object RegNumNotAlign {
+   def apply(reg: UInt, emul: UInt): Bool = {
+@@ -103,6 +104,10 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
+     VFWADD_WF, VFWADD_WV, VFWSUB_WF, VFWSUB_WV
+   ).map(_ === inst.ALL).reduce(_ || _)
+ 
++  private val zvbasebandInst = Seq(
++    VSCMUL_VV, VSCMULCJ_VV, VSCMACC_VV, VSCMACCCJ_VV, VSCADDCONJ_VV, VSCADDRQ_VV, VSCADDRTQ_VV
++  ).map(_ === inst.ALL).reduce(_ || _)
++
+   private val narrowingInst = Seq(
+     //int
+     VNCLIP_WI, VNCLIP_WV, VNCLIP_WX, VNCLIPU_WI, VNCLIPU_WV, VNCLIPU_WX, 
+@@ -192,7 +197,10 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
+ 
+   private val wnEewIllegal = (vdWideningInst || narrowingInst || redWideningInst) && SEW === 3.U
+ 
+-  private val eewIllegal = fpEewIllegal || intExtEewIllegal || wnEewIllegal
++  // xvbbp
++  private val zvbasebandEewIllegal = zvbasebandInst && SEW =/= 1.U
++
++  private val eewIllegal = fpEewIllegal || intExtEewIllegal || wnEewIllegal || zvbasebandEewIllegal
+ 
+   // 4. EMUL Illegal
+   private val lsEmulIllegal = (lsStrideInst || lsIndexInst) && (LMUL +& inst.WIDTH(1, 0) < SEW +& 1.U || LMUL +& inst.WIDTH(1, 0) > SEW +& 7.U)
+@@ -300,4 +308,4 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
+   dontTouch(regOverlapIllegal)
+   dontTouch(notDependVtypeInst)
+   dontTouch(vstartIllegal)
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
+index e12afb6..92f7b85 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
+@@ -118,6 +118,8 @@ class VIMacU(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg
+       mod.io.isSub       := VimacOpcode.isSub(opcode)
+       mod.io.widen       := widen
+       mod.io.isFixP      := VimacOpcode.isFixP(opcode)
++      mod.io.isComp      := VimacOpcode.isComp(opcode)
++      mod.io.isConj      := VimacOpcode.isConj(opcode)
+   }
+ 
+   /**

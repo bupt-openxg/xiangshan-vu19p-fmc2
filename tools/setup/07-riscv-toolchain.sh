@@ -2,7 +2,8 @@
 # 07 riscv64 交叉工具链 + python3-xlrd -> tools/sysroot  (本机无 sudo, 全部本地化安装)
 #   来源: Ubuntu 官方 deb (noble/24.04): 经 apt-get download 缓存在 tools/setup/cache,
 #         再用 dpkg-deb -x 解包到 tools/sysroot (无 root 权限亦可)。
-#   用途: sw/baremetal 交叉编译 (hello/wtest/probe) 与 hw 引脚表脚本 (xlrd 读 xls)。
+#   用途: sw/baremetal 交叉编译 (hello/wtest/probe)、nexus-am 的 FFT/MIMO 工作负载
+#         (需要 libc 头文件；用 --sysroot=tools/sysroot 编译) 与 hw 引脚表脚本 (xlrd 读 xls)。
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CACHE="$ROOT/tools/setup/cache"
@@ -23,6 +24,10 @@ PKGS=(
     gcc-13-riscv64-linux-gnu
     gcc-13-riscv64-linux-gnu-base
     gcc-riscv64-linux-gnu
+    # nexus-am (FFT/MIMO) 编译需要: gcc 内部头(stddef/stdint) + glibc 头 + linux 头
+    libgcc-13-dev-riscv64-cross
+    libc6-dev-riscv64-cross
+    linux-libc-dev-riscv64-cross
     make
     python3-xlrd
 )

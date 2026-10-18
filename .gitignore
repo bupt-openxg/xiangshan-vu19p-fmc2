@@ -28,6 +28,8 @@
 /tools/aeconsole
 /tools/setup/cache
 /tools/bin
+# xPack GCC 15（FFT/MIMO 工作负载；见 tools/setup/08-xpack-riscv-gcc.sh）
+/tools/xpack-riscv-none-elf-gcc-*
 
 # ---- 下载/生成的镜像与负载产物 ----
 /sw/linux/data.txt

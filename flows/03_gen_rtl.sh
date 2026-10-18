@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 03 生成香山 RTL + 模拟器残留检查 + RTL 后处理
-#   产物: third_party/XiangShan/build/rtl（约 1579 个文件）
-#   耗时: 约 20-40 分钟（mill + GraalVM 21）
+#   产物: third_party/XiangShan/build/rtl（文件数随上游版本变化；XVBBP 基线为 build.mill 时代）
+#   耗时: 约 30-60 分钟（mill 0.12.15 + GraalVM 21；首次运行需下载依赖）
+#   配置: CONFIG=MinimalConfig（8-wide / ROB48 / L1D 32KB / L2 128KB×2 / L3 4MB）
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

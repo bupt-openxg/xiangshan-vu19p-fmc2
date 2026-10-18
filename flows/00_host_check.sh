@@ -22,10 +22,21 @@ if [ -n "${avail:-}" ]; then
         || warn "磁盘可用仅 ${avail}GB（建议 ≥80GB：Vivado 工程约 12GB + 依赖约 2GB）"
 fi
 
+mem=$(free -g 2>/dev/null | awk '/Mem:/{print $2}')
 swap=$(free -g 2>/dev/null | awk '/Swap/{print $2}')
+if [ -n "${mem:-}" ]; then
+    if [ "$mem" -ge 64 ]; then
+        ok "RAM ${mem}GB"
+    else
+        warn "RAM ${mem}GB：本配置为 8-wide 后期香山（MinimalConfig），综合 elaboration 工作集约 90–110GB；15GB 机器预计只能 swap 抖动，建议构建机 RAM ≥64GB（推荐 128GB）"
+    fi
+fi
 if [ -n "${swap:-}" ]; then
-    [ "$swap" -ge 32 ] && ok "swap ${swap}GB" \
-        || warn "swap ${swap}GB（综合阶段建议 ≥32GB，见 tools/setup/03-swap.sh）"
+    if [ "$swap" -ge 64 ]; then
+        ok "swap ${swap}GB"
+    else
+        warn "swap ${swap}GB（综合阶段辅助项，建议 ≥64GB；swap 不能替代物理内存，见 tools/setup/03-swap.sh）"
+    fi
 fi
 
 source "$ROOT/tools/env.sh" >/dev/null 2>&1 || true
