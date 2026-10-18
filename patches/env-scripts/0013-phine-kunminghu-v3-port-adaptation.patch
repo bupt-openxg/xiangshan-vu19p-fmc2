@@ -1,0 +1,115 @@
+From 86c7a0fec439756efe4a86d23b34db593920542c Mon Sep 17 00:00:00 2001
+From: XiangShanVU19p Port <phine-port@local>
+Date: Sun, 18 Oct 2026 00:13:50 +0800
+Subject: [PATCH] phine: Kunminghu V3 port adaptation (autodetect riscv_halt,
+ use WFI as halt indicator)
+
+---
+ fpga_diff/core_flist.awk                | 14 +++++++++++---
+ fpga_diff/src/rtl/kmh/SimTop_wrapper.sv |  5 +++++
+ fpga_diff/tools/update_core_flist.sh    |  2 +-
+ fpga_diff/vivado/tcl/common/xs_uart.tcl |  8 ++++++++
+ 4 files changed, 25 insertions(+), 4 deletions(-)
+
+diff --git a/fpga_diff/core_flist.awk b/fpga_diff/core_flist.awk
+index 8c7a3a5..f0dcd04 100755
+--- a/fpga_diff/core_flist.awk
++++ b/fpga_diff/core_flist.awk
+@@ -1,4 +1,6 @@
+-function simtop_has_dma(path, line, in_simtop) {
++# 扫描顶层模块（默认 SimTop，NO_DIFF 时为 XSTop）的端口表，探测能力端口，
++# 供 xs_uart.tcl 决定 wrapper 的条件编译（V2/V3 端口差异自动适配）。
++function simtop_has_access(path, needle, line, in_simtop) {
+     while ((getline line < path) > 0) {
+         if (!in_simtop && line ~ /^[[:space:]]*module[[:space:]]+/) {
+             if (line !~ ("^[[:space:]]*module[[:space:]]+" top_module "([[:space:]#(]|$)")) {
+@@ -7,7 +9,7 @@ function simtop_has_dma(path, line, in_simtop) {
+             }
+             in_simtop = 1
+         }
+-        if (in_simtop && line ~ /dma_awready/) {
++        if (in_simtop && index(line, needle) > 0) {
+             close(path)
+             return 1
+         }
+@@ -25,9 +27,12 @@ BEGIN{
+     printf "set %s [list \\\n", var
+ }
+ {
+-    if (detect_simtop_dma && !has_simtop_dma && simtop_has_dma($0)) {
++    if (detect_simtop_dma && !has_simtop_dma && simtop_has_access($0, "dma_awready")) {
+         has_simtop_dma = 1
+     }
++    if (detect_simtop_halt && !has_simtop_halt && simtop_has_access($0, "io_riscv_halt_0")) {
++        has_simtop_halt = 1
++    }
+     printf " [file normalize \"%s\" ]\\\n", $0
+ }
+ END{
+@@ -35,4 +40,7 @@ END{
+     if (detect_simtop_dma) {
+         printf "set cpu_files_has_dma %d\n", has_simtop_dma
+     }
++    if (detect_simtop_halt) {
++        printf "set cpu_files_has_riscv_halt %d\n", has_simtop_halt
++    }
+ }
+diff --git a/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv b/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
+index 7ca1b3b..0d174b0 100755
+--- a/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
++++ b/fpga_diff/src/rtl/kmh/SimTop_wrapper.sv
+@@ -522,7 +522,12 @@ assign dma_core_rlast   = 1'b0;
+   .io_cacheable_check_resp_1_instr   (),
+   .io_cacheable_check_resp_1_mmio    (),
+   .io_cacheable_check_resp_1_atomic    (),
++`ifdef CPU_XIANGSHAN_KMHV2
+   .io_riscv_halt_0                     (io_riscv_halt_0),
++`else
++  // Kunminghu V3+ 的 XSTop 已无 debug halt 端口；用 WFI（核空闲）作为 halt 位可观测替代
++  .io_riscv_wfi_0                      (io_riscv_halt_0),
++`endif
+   .io_riscv_critical_error_0           (io_riscv_critical_error_0),
+   .io_traceCoreInterface_0_fromEncoder_enable (trace_en),
+   .io_traceCoreInterface_0_fromEncoder_stall  (trace_stall),
+diff --git a/fpga_diff/tools/update_core_flist.sh b/fpga_diff/tools/update_core_flist.sh
+index 94664e3..8bf32df 100755
+--- a/fpga_diff/tools/update_core_flist.sh
++++ b/fpga_diff/tools/update_core_flist.sh
+@@ -46,7 +46,7 @@ generate_vivado_filelist() {
+   fi
+ 
+   tmp_output=$tmp_dir/cpu_files.tcl
+-  awk -v var=cpu_files -v detect_simtop_dma=1 -v top_module="$top_module" \
++  awk -v var=cpu_files -v detect_simtop_dma=1 -v detect_simtop_halt=1 -v top_module="$top_module" \
+     -f "$fpga_diff_dir/core_flist.awk" \
+     "$tmp_dir/cpu_files" > "$tmp_output"
+   awk -v var=rtl_include_files -f "$fpga_diff_dir/core_flist.awk" \
+diff --git a/fpga_diff/vivado/tcl/common/xs_uart.tcl b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+index f8b386f..7de5b33 100755
+--- a/fpga_diff/vivado/tcl/common/xs_uart.tcl
++++ b/fpga_diff/vivado/tcl/common/xs_uart.tcl
+@@ -169,6 +169,8 @@ foreach cpu_candidate $cpu_candidates {
+ }
+ # Legacy generated lists predate DMA capability metadata and expose DMA ports.
+ set cpu_files_has_dma 1
++# Legacy generated lists predate riscv_halt capability metadata; assume the V2 port exists.
++set cpu_files_has_riscv_halt 1
+ set rtl_include_files [list]
+ set rtl_include_dirs [list]
+ if {[string equal $cpu_hit "no"]} {
+@@ -252,6 +254,12 @@ if {$cpu_files_has_dma} {
+ } else {
+     puts "INFO: SimTop DMA ports not present; wrapper DMA is tied off"
+ }
++if {$cpu_files_has_riscv_halt} {
++    fpga_append_unique defines "CPU_XIANGSHAN_KMHV2"
++    puts "INFO: SimTop io_riscv_halt_0 detected (Kunminghu V2 port set)"
++} else {
++    puts "INFO: SimTop io_riscv_halt_0 absent (Kunminghu V3+); wrapper uses WFI as halt indicator"
++}
+ if {!$no_diff} {
+   set xdma_pcie_lanes 4
+   if {[info exists ::env(XDMA_LINK_WIDTH)] && [string trim $::env(XDMA_LINK_WIDTH)] ne ""} {
+-- 
+2.43.0
+
