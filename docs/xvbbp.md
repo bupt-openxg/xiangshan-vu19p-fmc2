@@ -132,9 +132,23 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 | 依赖集成（flows/02：香山+yunsuan+nexus-am+riscv-xvbbp+env-scripts）| ✅ |
 | AM 工具链（xPack GCC 15 + 3 个补丁）| ✅ 离线构建通过（FFT n16/n1024/n4096、MIMO ext/scalar）|
 | RTL 生成与残留检查（flows/03）| ✅ 1821 文件；残留检查通过；`io_isComp/io_isConj` 已在 VIMac64bStage1/VIMacU |
-| 本机综合（flows/04）| ✅ **综合成功**（2h06m，0 errors / 0 critical warnings，峰值 31.9GB；15GB RAM + 128GB swap 可完成）；⏳ 实现/比特流进行中 |
+| 本机综合（flows/04）| ✅ **综合成功**（2h06m，0 errors / 0 critical warnings，峰值 31.9GB）|
+| 本机实现 | ⚠️ **布线已完成**（WNS **+0.709ns**、WHS +0.010ns、0 failing endpoints、0 路由错误），但 2026-10-19 00:40 被 **systemd-oomd** 杀掉整个 ZCode 会话（用户 slice 内存压力 69%>50% 持续 20s），`routed.dcp` 未落盘；已停止本机实现，转新构建机 |
+| 比特流 / 上板 | ⏳ 待新构建机 |
 | 板上 Hello 回归 | ⏳ |
 | 板上 7 指令冒烟 / FFT / MIMO | ⏳ |
+
+### 本机中断记录与恢复手段
+
+- 中断发生在 `report_power` 的 Vector-less Activity Propagation 阶段（工程 `impl_1/fpga_top_debug.tcl` 在**所有报告之后**才 `write_checkpoint ..._routed.dcp`，所以路由结果未保存）。
+- 已保存的检查点：`impl_1/fpga_top_debug_placed.dcp`、`fpga_top_debug_physopt.dcp`（post-place phys_opt）。
+- `tools/resume_impl_route.tcl`：从 physopt 检查点续跑
+  `route_design -directive Explore`（与工程一致）→ 必要报告 → `write_bitstream`，
+  **跳过 report_power/report_methodology**（上次的内存峰值来源）。用法见脚本头部。
+- 长时间 Vivado 任务建议跑在独立 systemd user unit 中（`systemd-run --user` +
+  `ManagedOOMPreference=avoid`），避免 oomd 连带杀掉交互会话。
+- 新构建机（内存充足）建议直接 `flows/00-04` 全流程；若想省掉综合+布局，也可把
+  `fpga_top_debug_physopt.dcp`（约 622MB）+ `tools/resume_impl_route.tcl` 拷过去续跑。
 
 ## 7. 许可与致谢
 

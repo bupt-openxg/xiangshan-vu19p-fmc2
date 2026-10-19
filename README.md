@@ -110,7 +110,7 @@ ReConstruct/
 | 依赖集成（flows/02）| ✅ 上游香山 @`0a150819` 浅拉 + 11 顶层/3 嵌套 submodule + yunsuan 包固定 + 本地提交（工作树干净）+ nexus-am/riscv-xvbbp/env-scripts 全部就绪 |
 | RTL 生成（flows/03）| ✅ 1821 文件；模拟器残留检查通过；ClockGate 透传；生成 RTL 含 `io_isComp/io_isConj`（VIMac64bStage1/VIMacU），确认扩展逻辑进入网表 |
 | FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 3 个 AM 板级补丁 |
-| 本机综合/比特流（flows/04）| ✅ **综合成功**：2h06m，0 errors / 0 critical warnings，峰值 31.9GB（15GB RAM + 128GB swap）；⏳ 实现/比特流进行中 |
+| 本机综合/比特流（flows/04）| ✅ **综合成功**：2h06m，0 errors / 0 critical warnings，峰值 31.9GB；⚠️ 本机实现布线已完成（WNS **+0.709ns**、WHS +0.010ns、0 路由错误），但 00:40 被 **systemd-oomd** 杀掉整个会话，`routed.dcp`/比特流未落盘 → 已停止本机实现，转新构建机（见 `docs/xvbbp.md` 的中断记录与恢复手段）|
 | 上板（flows/05/06/10）| ⏳ 待比特流 |
 
 ### kmh-v2 分支（2026-10-17 全链实测）
