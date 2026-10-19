@@ -45,7 +45,7 @@
 | YunSuan（XVBBP 包）| `GaryCAICHI/YunSuan@b4a62448b1539ab875daf36a62fe9cf6bc2fbe7b`（分支 `kunminghu-v2-xvbbp`）|
 | nexus-am | `GaryCAICHI/nexus-am@9dc5f1e1` + `patches/nexus-am/` 3 个补丁；软件包 `bupt-openxg-lab/riscv-xvbbp@c553928` |
 | 工具链（FFT/MIMO）| xPack `riscv-none-elf-gcc 15.2.0`（`tools/setup/08`；GCC13 不支持上游 RVV intrinsic 签名）|
-| env-scripts | 基线 `876f39e4cf690745a3951ac6c06ce5475d7d4f16` + `patches/env-scripts/` 12 个补丁 |
+| env-scripts | 基线 `876f39e4cf690745a3951ac6c06ce5475d7d4f16` + `patches/env-scripts/` 13 个补丁（12 板卡 + 0013 端口自动探测）|
 | FPGA 器件 | `xcvu19p-fsva3824-1-e`（Vivado 2024.2，license 必需）|
 | 板卡时钟 | GC02=80MHz(DDR 参考) · GC04=25MHz(CPU) · GC06=1MHz(RTC)；VADJ=1.2V |
 | 内存/UART | DDR 载入 `0x80000000`；UART16550 `0x310B0000`（分频 14 → ≈111.6kbps ≈ 115200）；裸机栈顶 `0x81000000`；AM 镜像入口 `0x80000000` |
@@ -55,7 +55,7 @@
 
 ```
 flows/         ★ 编号流程脚本 00..10（幂等、失败即停、依序执行完成全流程）
-patches/       ★ 三个补丁系列：env-scripts/（板卡 12 个）· xiangshan-xvbbp/（核心 5 文件）· nexus-am/（软件 3 个）
+patches/       ★ 三个补丁系列：env-scripts/（板卡 13 个）· xiangshan-xvbbp/（核心 5 文件）· nexus-am/（软件 3 个）
 third_party/   (gitignored) flows/02 拉取：XiangShan@0a150819+yunsuan@b4a62448 + env-scripts + nexus-am + riscv-xvbbp
 hw/            pinmaps/（板卡 IO 与 FMC2-DDR4 引脚表 CSV）· diag/（板卡诊断设计）· README
 sw/            baremetal/（裸机源码+Makefile）· linux/（官方镜像获取+DTB 时钟修正）· xvbbp/（FFT/MIMO 说明）

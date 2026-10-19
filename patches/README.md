@@ -4,7 +4,7 @@
 
 | 目录 | 目标 | 内容 |
 |---|---|---|
-| `env-scripts/` | `OpenXiangShan/env-scripts` | 板卡移植 12 个补丁（本文下半部分）|
+| `env-scripts/` | `OpenXiangShan/env-scripts` | 板卡移植 13 个补丁（12 板卡 + 1 端口自动探测；本文下半部分）|
 | `xiangshan-xvbbp/` | `OpenXiangShan/XiangShan` | XVBBP 7 条自定义指令的核心侧支持（5 个 Scala 文件）|
 | `nexus-am/` | `GaryCAICHI/nexus-am` | FFT/MIMO 板级适配（UART 25MHz、mstatus.VS、lp64d ABI）|
 
@@ -15,8 +15,10 @@
 
 # env-scripts 移植补丁系列
 
-本目录的 12 个补丁是**本工程对上游 `OpenXiangShan/env-scripts`（fpga_diff 流程）的完整移植改动**：
+本目录的 13 个补丁是**本工程对上游 `OpenXiangShan/env-scripts`（fpga_diff 流程）的完整移植改动**：
 把该流程适配到 PHINE PD-VU19P-2-LSI SOLO v3 板（器件/引脚/时钟/DDR/复位链路）并修复实机问题。
+其中 0013 是端口自动探测（`io_riscv_halt_0` 存在时按 V2 路径；V3 用 `io_riscv_wfi_0` 替代），
+对 V2/XVBBP 基线等价于原行为，纳入本分支以保证新克隆与本机验证树一致。
 
 ## 应用方式（flows/02_clone_deps.sh 自动完成）
 
@@ -52,6 +54,7 @@ git -c user.name=ReConstruct -c user.email=reconstruct@local \
 | 0010 | CPU 复位释放加固（v2）| 物理按键消抖链路在实机上不可靠 → `rstn_sw5/sw6` 加 PULLUP；`cpu_rstn` 释放增加 **VIO sw5 上升沿直通** |
 | 0011 | **纯 VIO 复位 + 上板可观测性（v3）** | 复位完全去引脚依赖（`sys_rstn_to_core=vio_sw6`、`ddr_rstn_to_core=vio_sw4`、`cpu_rstn` 只受 VIO 控制）；新增诊断计数器（CPU 取指/访存 AR 计数、UART TX 边沿、`{ndreset,halt,critical_error}`）；VIO 增 7 个输入探针；CN43 调试 JTAG 引脚空闲态加固（TCK 下拉/TMS/TDI 上拉，防止悬空引脚随机时钟化 TAP 造成随机 DMI 访问）|
 | 0012 | 复位脚本探针解析加固 | Vivado `get_hw_probes <模式>` 在探针刚被修改后会**回退返回该 VIO 全部探针**（含 `<const0>`），`commit_hw_vio` 报 44-152 中止 → 改为"先按精确名解析输出探针对象、之后复用同一对象" |
+| 0013 | **端口自动探测（V2/V3 兼容）** | `core_flist.awk` 探测 SimTop 是否有 `io_riscv_halt_0`；`xs_uart.tcl` 据此定义 `CPU_XIANGSHAN_KMHV2`；wrapper 在 V3 下把 halt 观测改接 `io_riscv_wfi_0`。对带 `io_riscv_halt_0` 的基线（4b9ddb8、0a150819）行为与原 V2 路径一致 |
 
 ## 上游对照与许可
 

@@ -57,7 +57,7 @@ flows/07_run_linux.sh            # 官方 Linux 镜像（自动下载+时钟修�
 ### D. XVBBP 分支（仅 xvbbp；裸机 + FFT/MIMO）
 
 ```bash
-flows/02_clone_deps.sh           # 香山@0a150819 + 5 文件补丁 + yunsuan@b4a62448 + nexus-am
+flows/02_clone_deps.sh           # 香山@0a150819 + 5 文件补丁 + yunsuan@b4a62448 + nexus-am + env-scripts 13 补丁
 flows/03_gen_rtl.sh && flows/04_build_bitstream.sh
 flows/05_program_fpga.sh && flows/06_run_hello.sh
 flows/09_build_xvbbp_sw.sh       # 官方 FFT/MIMO 代表集 → build/xvbbp/
@@ -81,7 +81,7 @@ flows/10_run_xvbbp.sh mimo-ext-zf4
 ReConstruct/
 ├── flows/                 ★ 编号流程脚本 00..10（幂等, 依序执行即完成全流程）
 ├── patches/               ★ 三个补丁系列（各自的 README 记录来源/基线/再生方法）
-│     ├── env-scripts/      板卡移植 12 个补丁
+│     ├── env-scripts/      板卡移植 13 个补丁（12 板卡 + 1 端口自动探测）
 │     ├── xiangshan-xvbbp/  XVBBP 核心 5 文件补丁（xvbbp 分支）
 │     └── nexus-am/         FFT/MIMO 板级 3 个补丁（xvbbp 分支）
 ├── third_party/           依赖克隆（flows/02 拉取；gitignored）

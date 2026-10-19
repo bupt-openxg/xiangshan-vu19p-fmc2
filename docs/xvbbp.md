@@ -20,7 +20,7 @@
 - **YunSuan 包**：`GaryCAICHI/YunSuan@b4a62448b1539ab875daf36a62fe9cf6bc2fbe7b`
   （分支 `kunminghu-v2-xvbbp`；`flows/02` 显式固定并记录到香山本地提交）
 - **软件**：`GaryCAICHI/nexus-am@9dc5f1e1` + `bupt-openxg-lab/riscv-xvbbp@c553928` 的 apps
-- **板级**：本仓库 `patches/env-scripts/`（12 个补丁，原 V2 流程已验证）+ `patches/nexus-am/`（3 个）
+- **板级**：本仓库 `patches/env-scripts/`（13 个：12 板卡 + 0013 端口自动探测，原 V2 流程已验证）+ `patches/nexus-am/`（3 个）
 - 配置：`MinimalConfig`（8-wide / ROB48 / L1D 32KB / L2 128KB×2 / L3 4MB）
 
 > 官方板级仓库 `bupt-openxg-lab/xiangshan-vu19p-fmc2` 计划稍后发布；本方案不依赖它，

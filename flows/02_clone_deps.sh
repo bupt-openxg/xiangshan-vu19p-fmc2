@@ -172,7 +172,7 @@ fi
 if git log --format=%s -1 | grep -q '^phine:'; then
     echo "[02] env-scripts 移植补丁已应用，跳过"
 else
-    echo "[02] checkout 补丁基线 ${ES_BASE:0:8} 并应用 12 个补丁"
+    echo "[02] checkout 补丁基线 ${ES_BASE:0:8} 并应用 13 个补丁"
     git checkout -q "$ES_BASE"
     git -c user.name="ReConstruct" -c user.email="reconstruct@local" \
         am -q "$ROOT"/patches/env-scripts/*.patch
