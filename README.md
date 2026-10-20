@@ -63,14 +63,17 @@ flows/05_program_fpga.sh && flows/06_run_hello.sh
 flows/09_build_xvbbp_sw.sh       # 官方 FFT/MIMO 代表集 → build/xvbbp/
 flows/10_run_xvbbp.sh smoke      # 七指令冒烟：期望 "EXT instruction demo: PASS"
 flows/10_run_xvbbp.sh mimo-ext-zf4
+flows/11_build_am_bench.sh       # NEMU/AM 复杂测试：Dhrystone / CoreMark / MicroBench
+flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
 ```
 
 - 该分支**不包含 Linux**；核心侧只加了 5 个文件（见 `patches/xiangshan-xvbbp/`），
   运算数据通路在 `GaryCAICHI/YunSuan@b4a62448` 这个 Scala 包里（flows/02 固定 SHA）。
-- 软件必须用 xPack GCC 15（`tools/setup/08`，flows/01 自动安装）；AM 板级补丁见
-  `patches/nexus-am/`（UART 25MHz / mstatus.VS / lp64d）。
-- 8-wide 后期线路综合工作集约 90–110GB：**15GB 机器预计只能 swap 抖动**，建议构建机
-  RAM ≥64GB（128GB 推荐）。
+- 软件必须用 xPack GCC 15（`tools/setup/08`，flows/01 自动安装），且 AM 镜像必须带
+  `CPPFLAGS=-DUART16550=1`（本板 16550 @ `0x310b0000`；flows/09/11 已内置）。
+  AM 板级补丁见 `patches/nexus-am/`（4 个：UART 25MHz / mstatus.VS / lp64d / 校验参考标量化）。
+- 实测：15GB 本机完成综合（峰值 31.9GB + swap）；实现/布线在 144 核/125GB 构建机
+  从 physopt 续跑，WNS +0.709ns / WHS +0.010ns。大机器可直接跑 `flows/00-04`。
 
 （可选）板卡诊断：`flows/08_board_diag.sh` —— 独立小工程（~20 分钟），
 分钟级验证四路时钟/复位引脚电平/复位逻辑/串口链路，排障首选（见 [docs/board-diag.md](docs/board-diag.md)）。
@@ -112,6 +115,7 @@ ReConstruct/
 | FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 4 个 AM 板级补丁（含 `UART16550` 与标量化校验参考）|
 | 本机综合/比特流（flows/04）| ✅ 本机综合 2h06m（0 errors / 0 critical warnings，峰值 31.9GB）；实现改在 144 核/125GB 构建机从 `physopt.dcp` 续跑：**WNS +0.709ns / WHS +0.010ns / TNS=THS=0 / 0 路由错误**，产出 190MB 比特流（`docs/xvbbp.md` 记录了 oomd 中断与恢复过程）|
 | 上板（flows/05/06/10）| ✅ **全链实测通过（2026-10-20）**：裸机 Hello 回归；7 条指令逐条 PASS + `EXT instruction demo: PASS`；FFT EXT n1024/n4096 `CHECK: PASS`；MIMO EXT ZF4/MMSE2 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`；scalar 基线同样通过。证据见 `docs/evidence/xvbbp-20261020/` |
+| NEMU/AM 复杂测试（flows/11）| ✅ **上板实测通过（2026-10-20）**：Dhrystone 500k runs `PASS`（2.23 DMIPS/MHz，IPC 1.643）；CoreMark 2 次迭代 2K CRC 全匹配（`crcfinal 0x72be`）；MicroBench test 规模 10 项子测试全 Passed、`MicroBench PASS`。证据见 `docs/evidence/am-bench-20261020/` |
 
 ### kmh-v2 分支（2026-10-17 全链实测）
 

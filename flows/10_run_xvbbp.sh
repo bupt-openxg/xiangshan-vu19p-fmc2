@@ -5,6 +5,8 @@
 #   key 来自 build/xvbbp/images.tsv（flows/09 生成）:
 #     smoke / fft-ext-1024 / fft-scalar-1024 / fft-ext-4096 /
 #     mimo-ext-zf4 / mimo-ext-mmse2 / mimo-scalar-zf4
+#   也可直接传 image.bin（flows/11 构建的 am-bench 测试）:
+#     dhrystone / coremark-2iter / microbench-test
 #   环境变量: SER=/dev/ttyUSB1  LOG=...  CAPSEC=300（MIMO/FFT 可能需要更久）
 #   前置: 已烧录比特流（flows/05_program_fpga.sh）
 # =============================================================================
@@ -20,7 +22,8 @@ OUT="$BUILD_ROOT/xvbbp"
 MANIFEST="$OUT/images.tsv"
 
 if [ -f "$KEY" ]; then
-    BIN="$KEY"
+    # 绝对化: 后面会 cd 到 FPGA_ROOT，相对路径会失效
+    BIN="$(cd "$(dirname "$KEY")" && pwd)/$(basename "$KEY")"
     KEY="$(basename "$KEY" .bin)"
 else
     [ -f "$MANIFEST" ] || { echo "ERROR: 缺少 $MANIFEST（先运行 flows/09_build_xvbbp_sw.sh）"; exit 1; }
@@ -76,8 +79,16 @@ case "$KEY" in
     mimo*)
         grep -q "MIMO_VALIDATE_PASS" "$LOG" || fail=1
         grep -q "MIMO_DONE" "$LOG" || fail=1 ;;
+    dhrystone*)
+        grep -q "Dhrystone PASS" "$LOG" || fail=1 ;;
+    coremark*)
+        grep -q "CoreMark Iterations/Sec" "$LOG" || fail=1
+        # 2K performance run 的标准校验值（与迭代次数无关）
+        grep -q "crcfinal.*0x72be" "$LOG" || fail=1 ;;
+    microbench*)
+        grep -q "MicroBench PASS" "$LOG" || fail=1 ;;
 esac
-grep -qE "Mismatch|EXT instruction demo: FAIL|CHECK: FAIL|MIMO_VALIDATE_FAIL|vxsat mismatch|rotpair demo: FAIL" "$LOG" && fail=1
+grep -qE "Mismatch|EXT instruction demo: FAIL|CHECK: FAIL|MIMO_VALIDATE_FAIL|vxsat mismatch|rotpair demo: FAIL|Dhrystone FAIL|MicroBench FAIL|Validation failed" "$LOG" && fail=1
 
 if [ "$fail" = 0 ]; then
     echo "结果: PASS（$KEY）"

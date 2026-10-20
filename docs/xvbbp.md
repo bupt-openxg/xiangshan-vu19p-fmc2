@@ -98,6 +98,8 @@ flows/06_run_hello.sh                # 回归：裸机 Hello
 flows/10_run_xvbbp.sh smoke          # 7 指令冒烟，期望 EXT instruction demo: PASS
 flows/10_run_xvbbp.sh fft-ext-1024
 flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
+flows/11_build_am_bench.sh           # NEMU/AM 复杂测试 → build/am-bench/
+flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
 ```
 
 `flows/09` 产出的 key（`build/xvbbp/images.tsv`）：
@@ -116,7 +118,21 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 
 判据：`smoke`/`fft-ext-*` 要求 `EXT instruction demo: PASS` 且 `CHECK: PASS`；
 `fft-scalar-*` 要求 `CHECK: PASS`；`mimo*` 要求 `MIMO_VALIDATE_PASS` 与 `MIMO_DONE`；
-出现 `Mismatch`/`CHECK: FAIL`/`MIMO_VALIDATE_FAIL` 即判失败。
+`dhrystone*` 要求 `Dhrystone PASS`；`coremark*` 要求 `CoreMark Iterations/Sec` 且
+`crcfinal 0x72be`（2K performance 标准值）；`microbench*` 要求 `MicroBench PASS`。
+出现 `Mismatch`/`CHECK: FAIL`/`MIMO_VALIDATE_FAIL` 等即判失败。
+
+### NEMU/AM 复杂测试（flows/11）
+
+`third_party/nexus-am/apps/` 自带 NEMU/香山常用的基准：
+`flows/11_build_am_bench.sh` 用本板 16550 配置构建 Dhrystone、CoreMark（2 次迭代）、
+MicroBench（test 规模），产物在 `build/am-bench/`。预编译的
+`ready-to-run/*.bin` 默认走 uartlite，**不要直接拿到本板跑**。
+
+2026-10-20 上板结果：Dhrystone `PASS`（500k runs，`cycle 127500620 / inst 209500073`，
+IPC 1.643，2.23 DMIPS/MHz）；CoreMark 2K CRC 全匹配（`crcfinal 0x72be`，16.35s）；
+MicroBench 10 项子测试（qsort/queen/bf/fib/sieve/15pz/dinic/lzip/ssort/md5）全
+`Passed.`。日志与读数说明见 `docs/evidence/am-bench-20261020/`。
 
 ### 软件侧注意事项
 
@@ -151,6 +167,7 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 | 板上 7 指令冒烟 | ✅ 7 条逐条 PASS + `EXT instruction demo: PASS` + `CHECK: PASS` |
 | 板上 FFT EXT | ✅ n1024 / n4096 均 `CHECK: PASS`（另 scalar n1024 基线通过）|
 | 板上 MIMO EXT | ✅ ZF 4x4 / MMSE 2x2 均 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`（另 scalar ZF4 基线通过）|
+| 板上 NEMU/AM 复杂测试 | ✅ Dhrystone 500k runs `PASS`（IPC 1.643，2.23 DMIPS/MHz）；CoreMark 2 次迭代 2K CRC 全匹配；MicroBench 10 项子测试全 Passed |
 
 ### 上板实测（2026-10-20）
 

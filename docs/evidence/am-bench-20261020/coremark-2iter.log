@@ -1,0 +1,15 @@
+Running CoreMark for 2 iterations
+2K performance run parameters for coremark.
+CoreMark Size    : 666
+Total time (ms)  : 16353
+Iterations       : 2
+Compiler version : GCC15.2.0
+seedcrc          : 0xe9f5
+[0]crclist       : 0xe714
+[0]crcmatrix     : 0x1fd7
+[0]crcstate      : 0x8e3a
+[0]crcfinal      : 0x72be
+Finished in 16353 ms.
+==================================================
+CoreMark Iterations/Sec 122.30
+Exit with code = 0

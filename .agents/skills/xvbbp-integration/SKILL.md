@@ -56,6 +56,8 @@ flows/10_run_xvbbp.sh fft-ext-1024
 flows/10_run_xvbbp.sh fft-ext-4096
 flows/10_run_xvbbp.sh mimo-ext-zf4
 flows/10_run_xvbbp.sh mimo-ext-mmse2
+flows/11_build_am_bench.sh        # Dhrystone / CoreMark / MicroBench（本板 16550）
+flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
 ```
 
 ## 验证要点（2026-10-20 全链已通过）
@@ -66,6 +68,10 @@ flows/10_run_xvbbp.sh mimo-ext-mmse2
 - 实测：smoke 7 条指令逐条 PASS；fft-ext n1024/n4096 CHECK PASS；
   mimo-ext zf4 fail=0 max_abs=10/11、mmse2 fail=0 max_abs=7/11；scalar 基线通过。
   证据：`docs/evidence/xvbbp-20261020/`。
+- NEMU/AM 复杂测试（flows/11）：Dhrystone 500k runs `PASS`（2.23 DMIPS/MHz、IPC 1.643）；
+  CoreMark 2K CRC 全匹配（`crcfinal 0x72be`）；MicroBench test 规模 10 项全 `Passed.`。
+  证据：`docs/evidence/am-bench-20261020/`。`ready-to-run/*.bin` 是 uartlite 版，
+  本板不能直接用。
 - MIMO 的 `.bin` 因 `.bss` 置零约 1–4MB，JTAG 写入是分钟级，不是卡死。
 - `dft_rvv` 后端依赖香山对相应 RVV 指令的实现，不作为硬性目标；ext/scalar 是必跑项。
 
