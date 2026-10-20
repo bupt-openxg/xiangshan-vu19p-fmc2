@@ -76,6 +76,7 @@ flows/03_gen_rtl.sh && flows/04_build_bitstream.sh
 flows/05_program_fpga.sh && flows/06_run_hello.sh
 flows/09_build_xvbbp_sw.sh && flows/10_run_xvbbp.sh smoke
 flows/11_build_am_bench.sh && flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
+MATRIX=1 flows/09_build_xvbbp_sw.sh && flows/12_run_xvbbp_matrix.sh   # 16 FFT 正/逆 + 4 MIMO
 # kmh-v2 分支（含 Linux）
 flows/05_program_fpga.sh && flows/06_run_hello.sh && flows/07_run_linux.sh
 # 排障首选

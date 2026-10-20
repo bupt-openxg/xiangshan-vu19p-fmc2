@@ -3,6 +3,7 @@
 # 09 构建 XVBBP 裸机负载（官方冻结 FFT/MIMO，nexus-am）
 #   产物: build/xvbbp/<key>.bin + build/xvbbp/images.tsv（供 flows/10 使用）
 #   默认构建: smoke(7 指令冒烟) + FFT ext/scalar 代表尺寸 + MIMO ext/scalar 代表内核
+#   MATRIX=1: 改为 XVBBP 复杂矩阵（8 尺寸 × 正/逆 EXT FFT + 4 个 MIMO kernel）
 #   ALL=1: 额外跑官方 xvbbp-build-all（48 FFT + 12 MIMO，仅构建不归档）
 #   工具链: tools/setup/08 安装的 xPack GCC 15（GCC 13 不支持上游 RVV intrinsic 签名）
 #   板级: 必须 -DUART16550=1（本板 16550 @0x310b0000）;
@@ -79,14 +80,27 @@ build_mimo() { # key impl kernel
     record "$key" "$OUT/$key.bin" "MIMO $impl $kernel"
 }
 
-# ---- 默认代表集 ----
-build_fft smoke           dft_ext    16   0   # 官方 7 指令冒烟（打印 EXT instruction demo: PASS）
-build_fft fft-ext-1024    dft_ext    1024 0
-build_fft fft-scalar-1024 dft_scalar 1024 0
-build_fft fft-ext-4096    dft_ext    4096 0
-build_mimo mimo-ext-zf4    ext    eq_zf_4x4
-build_mimo mimo-ext-mmse2  ext    eq_mmse_2x2
-build_mimo mimo-scalar-zf4 scalar eq_zf_4x4
+if [ "${MATRIX:-0}" = 1 ]; then
+    # ---- XVBBP 复杂矩阵：EXT 全尺寸正/逆 FFT + 全部 MIMO kernel ----
+    build_fft smoke dft_ext 16 0
+    for points in 16 64 128 256 512 1024 2048 4096; do
+        build_fft "fft-ext-n${points}-fwd"  dft_ext "$points" 0
+        build_fft "fft-ext-n${points}-idft" dft_ext "$points" 1
+    done
+    build_mimo mimo-ext-zf2    ext eq_zf_2x2
+    build_mimo mimo-ext-mmse2  ext eq_mmse_2x2
+    build_mimo mimo-ext-zf4    ext eq_zf_4x4
+    build_mimo mimo-ext-mmse4  ext eq_mmse_4x4
+else
+    # ---- 默认代表集 ----
+    build_fft smoke           dft_ext    16   0   # 官方 7 指令冒烟（打印 EXT instruction demo: PASS）
+    build_fft fft-ext-1024    dft_ext    1024 0
+    build_fft fft-scalar-1024 dft_scalar 1024 0
+    build_fft fft-ext-4096    dft_ext    4096 0
+    build_mimo mimo-ext-zf4    ext    eq_zf_4x4
+    build_mimo mimo-ext-mmse2  ext    eq_mmse_2x2
+    build_mimo mimo-scalar-zf4 scalar eq_zf_4x4
+fi
 
 if [ "${ALL:-0}" = 1 ]; then
     echo "[09] 官方全量构建: 48 FFT + 12 MIMO（不逐镜像归档）"

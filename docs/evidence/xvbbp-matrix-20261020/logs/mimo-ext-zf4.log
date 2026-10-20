@@ -1,0 +1,5 @@
+MIMO_EQ_BENCH backend=ext layout=site4 validate_kernel=1 perf_kernel=1 sites2=15600 sites4=15600 lambda_q15=512
+MIMO_VALIDATE_PASS kernel=eq_zf_4x4 count=62400 tol=11 checksum=-390981967
+MIMO_VALIDATE_ERROR_STATS kernel=eq_zf_4x4 tol=11 fail=0 components=124800 max_abs=10 mean_abs_x1000=1994 mse_x1000=6382 over_tol=0 over2=40176 over3=20660 over4=9296 over8=25 over16=0
+MIMO_DONE status=0 checksum=-390981967
+Exit with code = 0

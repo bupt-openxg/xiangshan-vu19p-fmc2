@@ -1,0 +1,11 @@
+EXT demo vscmul     : PASS
+EXT demo vscmulcj   : PASS
+EXT demo vscmacc    : PASS
+EXT demo vscmacccj  : PASS
+EXT demo vscaddconj : PASS
+EXT demo vscaddrq   : PASS
+EXT demo vscaddrtq  : PASS
+EXT instruction demo: PASS
+Vector dump omitted for 128 points in validate mode
+CHECK: PASS
+Exit with code = 0

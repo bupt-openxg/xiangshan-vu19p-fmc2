@@ -100,6 +100,8 @@ flows/10_run_xvbbp.sh fft-ext-1024
 flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 flows/11_build_am_bench.sh           # NEMU/AM 复杂测试 → build/am-bench/
 flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
+MATRIX=1 flows/09_build_xvbbp_sw.sh  # XVBBP 复杂矩阵：16 FFT + 4 MIMO
+flows/12_run_xvbbp_matrix.sh         # 板上逐项跑完矩阵（约 40 分钟）
 ```
 
 `flows/09` 产出的 key（`build/xvbbp/images.tsv`）：
@@ -111,6 +113,9 @@ flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
 | `fft-scalar-1024` | 标量后端参考 |
 | `mimo-ext-zf4` / `mimo-ext-mmse2` | EXT 后端 MIMO（ZF / MMSE）|
 | `mimo-scalar-zf4` | 标量参考 |
+
+`MATRIX=1` 时的 key 为 `fft-ext-n{16,64,...,4096}-{fwd,idft}` 与
+`mimo-ext-{zf2,mmse2,zf4,mmse4}`；`flows/12` 直接按这些 key 逐项运行。
 
 运行机制（`flows/10`）：`bin2fpgadata` 转格式 → `make halt_soc` → `make write_ddr`
 （DDR 0x80000000）→ 串口抓包 → `make reset_cpu`。AM 镜像入口固定为 `0x80000000`
@@ -133,6 +138,20 @@ MicroBench（test 规模），产物在 `build/am-bench/`。预编译的
 IPC 1.643，2.23 DMIPS/MHz）；CoreMark 2K CRC 全匹配（`crcfinal 0x72be`，16.35s）；
 MicroBench 10 项子测试（qsort/queen/bf/fib/sieve/15pz/dinic/lzip/ssort/md5）全
 `Passed.`。日志与读数说明见 `docs/evidence/am-bench-20261020/`。
+
+### XVBBP EXT 复杂矩阵（flows/09 MATRIX=1 + flows/12）
+
+默认代表集只跑 n16/n1024/n4096 正向和 2 个 MIMO kernel，**不足以压满共轭指令**。
+`MATRIX=1` 会构建 8 个尺寸 × 正/逆 EXT FFT（16 个）+ 全部 4 个 MIMO kernel：
+
+| 组 | 覆盖的 XVBBP 指令 | 2026-10-20 上板 |
+|---|---|---|
+| FFT EXT 正向（n16..n4096）| `vscmul`、`vscmacc`、`vscaddrq`、`vscaddrtq` 及 radix 组合 | 8/8 `CHECK: PASS` |
+| FFT EXT 逆向（n16..n4096）| 上述 + `vscmulcj`、`vscmacccj`、`vscaddconj`（真实数据流）| 8/8 `CHECK: PASS` |
+| MIMO EXT ZF/MMSE 2x2/4x4 | 长序列 `vscmul/vscmacc/vscaddrq` | 4/4 `MIMO_VALIDATE_PASS`（fail=0，max_abs≤10，tol=11）|
+
+`flows/12_run_xvbbp_matrix.sh` 逐项运行并生成 `build/xvbbp-matrix/summary.tsv`
+（21 项全 PASS）。完整串口实录见 `docs/evidence/xvbbp-matrix-20261020/`。
 
 ### 软件侧注意事项
 
@@ -168,6 +187,7 @@ MicroBench 10 项子测试（qsort/queen/bf/fib/sieve/15pz/dinic/lzip/ssort/md5�
 | 板上 FFT EXT | ✅ n1024 / n4096 均 `CHECK: PASS`（另 scalar n1024 基线通过）|
 | 板上 MIMO EXT | ✅ ZF 4x4 / MMSE 2x2 均 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`（另 scalar ZF4 基线通过）|
 | 板上 NEMU/AM 复杂测试 | ✅ Dhrystone 500k runs `PASS`（IPC 1.643，2.23 DMIPS/MHz）；CoreMark 2 次迭代 2K CRC 全匹配；MicroBench 10 项子测试全 Passed |
+| 板上 XVBBP EXT 复杂矩阵 | ✅ **21/21 PASS**：8 尺寸 × 正/逆 FFT（逆变换真实执行共轭指令）+ 4 个 MIMO kernel（ZF/MMSE 2x2/4x4，fail=0）|
 
 ### 上板实测（2026-10-20）
 
