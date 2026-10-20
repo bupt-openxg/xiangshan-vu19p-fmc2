@@ -6,10 +6,11 @@
 与之前的代表集不同，本矩阵覆盖 **EXT 后端的完整数据通路**：
 
 - FFT：8 个尺寸（16/64/128/256/512/1024/2048/4096）× **正向/逆向**，共 16 个镜像；
-  逆变换在真实 FFT 数据流中执行 `vscmulcj/vscmacccj/vscaddconj`（共轭复数乘/加），
-  不再只是 n16 的 8-lane demo。
-- MIMO：全部 4 个 kernel（ZF/MMSE × 2x2/4x4），每个都是 15600 个 site、数万次
-  校验点，覆盖 `vscmul/vscmacc/vscaddrq/vscaddrtq` 的长序列运算。
+  真实 FFT 数据流使用 `vscmul`（34 处/镜像）、`vscaddrq`（6 处）、`vscaddrtq`（6 处），
+  每个镜像启动时的 n16 demo 再逐条执行全部 7 条指令。
+- MIMO：全部 4 个 kernel（ZF/MMSE × 2x2/4x4）。以 4x4 MMSE 镜像为例，反汇编统计到
+  `vscmul` 36、`vscmulcj` 56、`vscmacc` 20、`vscmacccj` 52 处，覆盖长序列的
+  共轭复数乘/乘累加；每个 kernel 15600 个 site、数万校验点。
 
 ## 结果：21/21 PASS
 

@@ -141,13 +141,13 @@ MicroBench 10 项子测试（qsort/queen/bf/fib/sieve/15pz/dinic/lzip/ssort/md5�
 
 ### XVBBP EXT 复杂矩阵（flows/09 MATRIX=1 + flows/12）
 
-默认代表集只跑 n16/n1024/n4096 正向和 2 个 MIMO kernel，**不足以压满共轭指令**。
+默认代表集只跑 n16/n1024/n4096 正向和 2 个 MIMO kernel，**不足以覆盖全部指令的真实数据流**。
 `MATRIX=1` 会构建 8 个尺寸 × 正/逆 EXT FFT（16 个）+ 全部 4 个 MIMO kernel：
 
 | 组 | 覆盖的 XVBBP 指令 | 2026-10-20 上板 |
 |---|---|---|
 | FFT EXT 正向（n16..n4096）| `vscmul`、`vscmacc`、`vscaddrq`、`vscaddrtq` 及 radix 组合 | 8/8 `CHECK: PASS` |
-| FFT EXT 逆向（n16..n4096）| 上述 + `vscmulcj`、`vscmacccj`、`vscaddconj`（真实数据流）| 8/8 `CHECK: PASS` |
+| FFT EXT 逆向（n16..n4096）| `vscmul`、`vscaddrq`、`vscaddrtq`（真实数据流；共轭乘/累加由 MIMO 覆盖）| 8/8 `CHECK: PASS` |
 | MIMO EXT ZF/MMSE 2x2/4x4 | 长序列 `vscmul/vscmacc/vscaddrq` | 4/4 `MIMO_VALIDATE_PASS`（fail=0，max_abs≤10，tol=11）|
 
 `flows/12_run_xvbbp_matrix.sh` 逐项运行并生成 `build/xvbbp-matrix/summary.tsv`
@@ -187,7 +187,7 @@ MicroBench 10 项子测试（qsort/queen/bf/fib/sieve/15pz/dinic/lzip/ssort/md5�
 | 板上 FFT EXT | ✅ n1024 / n4096 均 `CHECK: PASS`（另 scalar n1024 基线通过）|
 | 板上 MIMO EXT | ✅ ZF 4x4 / MMSE 2x2 均 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`（另 scalar ZF4 基线通过）|
 | 板上 NEMU/AM 复杂测试 | ✅ Dhrystone 500k runs `PASS`（IPC 1.643，2.23 DMIPS/MHz）；CoreMark 2 次迭代 2K CRC 全匹配；MicroBench 10 项子测试全 Passed |
-| 板上 XVBBP EXT 复杂矩阵 | ✅ **21/21 PASS**：8 尺寸 × 正/逆 FFT（逆变换真实执行共轭指令）+ 4 个 MIMO kernel（ZF/MMSE 2x2/4x4，fail=0）|
+| 板上 XVBBP EXT 复杂矩阵 | ✅ **21/21 PASS**：8 尺寸 × 正/逆 FFT（数据流用 `vscmul/vscaddrq/vscaddrtq`）+ 4 个 MIMO kernel（`vscmulcj/vscmacccj` 大量使用；fail=0）|
 
 ### 上板实测（2026-10-20）
 

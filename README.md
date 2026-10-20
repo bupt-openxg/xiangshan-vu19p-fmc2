@@ -116,7 +116,7 @@ ReConstruct/
 | 本机综合/比特流（flows/04）| ✅ 本机综合 2h06m（0 errors / 0 critical warnings，峰值 31.9GB）；实现改在 144 核/125GB 构建机从 `physopt.dcp` 续跑：**WNS +0.709ns / WHS +0.010ns / TNS=THS=0 / 0 路由错误**，产出 190MB 比特流（`docs/xvbbp.md` 记录了 oomd 中断与恢复过程）|
 | 上板（flows/05/06/10）| ✅ **全链实测通过（2026-10-20）**：裸机 Hello 回归；7 条指令逐条 PASS + `EXT instruction demo: PASS`；FFT EXT n1024/n4096 `CHECK: PASS`；MIMO EXT ZF4/MMSE2 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`；scalar 基线同样通过。证据见 `docs/evidence/xvbbp-20261020/` |
 | NEMU/AM 复杂测试（flows/11）| ✅ **上板实测通过（2026-10-20）**：Dhrystone 500k runs `PASS`（2.23 DMIPS/MHz，IPC 1.643）；CoreMark 2 次迭代 2K CRC 全匹配（`crcfinal 0x72be`）；MicroBench test 规模 10 项子测试全 Passed、`MicroBench PASS`。证据见 `docs/evidence/am-bench-20261020/` |
-| XVBBP EXT 复杂矩阵（flows/09 MATRIX=1 + flows/12）| ✅ **21/21 PASS**：8 个尺寸 × 正/逆 FFT（逆变换真实执行 `vscmulcj/vscmacccj/vscaddconj`）+ 4 个 MIMO kernel（ZF/MMSE 2x2/4x4，fail=0，max_abs≤10/11）。证据见 `docs/evidence/xvbbp-matrix-20261020/` |
+| XVBBP EXT 复杂矩阵（flows/09 MATRIX=1 + flows/12）| ✅ **21/21 PASS**：8 个尺寸 × 正/逆 FFT（数据流用 `vscmul/vscaddrq/vscaddrtq`）+ 4 个 MIMO kernel（`vscmulcj/vscmacccj` 大量使用；fail=0，max_abs≤10/11）。证据见 `docs/evidence/xvbbp-matrix-20261020/` |
 
 ### kmh-v2 分支（2026-10-17 全链实测）
 
