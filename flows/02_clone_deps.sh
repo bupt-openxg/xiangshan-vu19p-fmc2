@@ -5,7 +5,7 @@
 #                             + patches/xiangshan-xvbbp（5 文件核心补丁）
 #                             + yunsuan 包固定到 GaryCAICHI/YunSuan@b4a62448（V 数据通路）
 #   third_party/env-scripts   上游 main → 补丁基线 → git am patches/env-scripts/*.patch
-#   third_party/nexus-am      GaryCAICHI/nexus-am@9dc5f1e1 + patches/nexus-am（UART 25MHz / VS）
+#   third_party/nexus-am      GaryCAICHI/nexus-am@9dc5f1e1 + patches/nexus-am 0001-0003（UART 25MHz / VS / lp64d；0004 由 flows/09 用于 apps）
 #   third_party/riscv-xvbbp   XVBBP 冻结软件包 @c553928（FFT/MIMO 工作负载源）
 # =============================================================================
 set -euo pipefail
@@ -133,7 +133,8 @@ if [ "$(git -C "$TP/nexus-am" rev-parse HEAD)" != "$AM_SHA" ]; then
 fi
 [ "$(git -C "$TP/nexus-am" rev-parse HEAD)" = "$AM_SHA" ] || {
     echo "[02] ERROR: nexus-am SHA 不符"; exit 1; }
-for p in "$ROOT"/patches/nexus-am/*.patch; do
+# 0001-0003 作用于 AM 源码树; 0004 作用于 apps/fft（由 flows/09 在拷贝后应用）
+for p in "$ROOT"/patches/nexus-am/000[1-3]-*.patch; do
     [ -f "$p" ] || continue
     if git -C "$TP/nexus-am" apply --reverse --check "$p" >/dev/null 2>&1; then
         echo "[02] nexus-am 补丁已应用: $(basename "$p")"

@@ -28,6 +28,7 @@ AM=third_party/nexus-am
 make -C "$AM/apps/fft" DFT_IMPL=dft_ext FFT_POINTS=16 FFT_RUN_IDFT=0 \
      FFT_VALIDATE=1 FFT_REPEAT=1 ARCH=riscv64-xs AM_HOME="$AM" \
      CROSS_COMPILE="$TC" RVV_TOOLCHAIN_PREFIX="$TC" \
+     CPPFLAGS=-DUART16550=1 \
      CC_OPT="-O2 -Wno-error=unused-variable -Wno-error=unused-function"
 # -> $AM/apps/fft/build/hello-ext-validate-n16-r1-idft0-riscv64-xs.bin
 ```
@@ -36,7 +37,12 @@ make -C "$AM/apps/fft" DFT_IMPL=dft_ext FFT_POINTS=16 FFT_RUN_IDFT=0 \
 
 - **必须** xPack `riscv-none-elf-gcc 15.2.0`（`tools/setup/08` 安装）。上游代码使用
   GCC 14+ 的 RVV intrinsic 签名；本仓库的 GCC 13.3 会使 MIMO 编译失败。
-- 板级补丁（`patches/nexus-am/`）：UART 分频 25MHz、`mstatus.VS=Initial`、显式 `-mabi=lp64d`。
+- **必须** `CPPFLAGS=-DUART16550=1`：本板 UART 是 16550 @ `0x310b0000`；AM 默认的
+  uartlite @ `0x40600000` 不存在，首次 putchar 会挂死 CPU。
+- 板级补丁（`patches/nexus-am/`）：UART 分频 25MHz、`mstatus.VS=Initial`、显式
+  `-mabi=lp64d`、FFT 的 OAI 校验参考标量化（0004，避免 SIMDe 的 RVV dft16 在
+  重复调用后卡死；EXT/RVV 内核仍为 `-march=rv64gcv`）。0004 由 `flows/09` 在拷贝
+  官方 apps 后应用。
 
 ## 镜像与加载
 

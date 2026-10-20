@@ -1,0 +1,15 @@
+--- a/fft/Makefile
++++ b/fft/Makefile
+@@ -151,6 +151,12 @@
+ CFLAGS   += $(FFT_APP_CFLAGS)
+ CFLAGS   += $(FFT_KERNEL_FLAGS)
+ 
++# ReConstruct: keep the OAI validation reference scalar on this FPGA port.
++# With -march=rv64gcv SIMDe maps the SSE dft16 to RVV and the core hangs after
++# a few repeated calls; the scalar reference is bit-identical for this kernel.
++# Object path deliberately matches OBJS ($(DST_DIR)/./<name>.o).
++$(DST_DIR)/./oai_dfts.o: CFLAGS := $(filter-out -march=rv64gc -march=rv64gcv,$(CFLAGS)) -march=rv64gc
++
+ tidy:
+ 	rm -rf $(FFT_SCRATCH_CLEAN_TARGETS)
+ 

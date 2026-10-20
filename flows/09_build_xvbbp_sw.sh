@@ -5,6 +5,8 @@
 #   默认构建: smoke(7 指令冒烟) + FFT ext/scalar 代表尺寸 + MIMO ext/scalar 代表内核
 #   ALL=1: 额外跑官方 xvbbp-build-all（48 FFT + 12 MIMO，仅构建不归档）
 #   工具链: tools/setup/08 安装的 xPack GCC 15（GCC 13 不支持上游 RVV intrinsic 签名）
+#   板级: 必须 -DUART16550=1（本板 16550 @0x310b0000）;
+#         FFT 的 OAI 校验参考编成 RV64GC（patches/nexus-am/0004，避免 SIMDe RVV 卡死）
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,11 +35,23 @@ for app in fft mimo; do
     cp -a "$PKG/software/nexus-am/apps/$app/." "$AM/apps/$app/"
 done
 
+# 参考实现标量化（SIMDe 的 RVV dft16 在本核上重复调用会卡死）
+PATCH_REF="$ROOT/patches/nexus-am/0004-fft-oai-scalar-reference.patch"
+[ -f "$PATCH_REF" ] || { echo "ERROR: 缺少 $PATCH_REF"; exit 1; }
+patch -p1 -d "$AM/apps" --batch < "$PATCH_REF" || {
+    echo "ERROR: 应用 $PATCH_REF 失败"; exit 1;
+}
+
+# UART16550 宏未纳入 Makefile 依赖: 切换串口后端时必须手工清掉 am.a
+rm -rf "$AM/am/build"
+
 COMMON=(
     ARCH=riscv64-xs
     AM_HOME="$AM"
     CROSS_COMPILE="$CROSS"
     RVV_TOOLCHAIN_PREFIX="$CROSS"
+    # 本板是 16550 @0x310b0000; 默认的 uartlite @0x40600000 会卡死 CPU
+    "CPPFLAGS=-DUART16550=1"
     "CC_OPT=-O2 -Wno-error=unused-variable -Wno-error=unused-function"
 )
 

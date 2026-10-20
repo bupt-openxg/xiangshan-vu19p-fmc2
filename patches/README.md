@@ -6,10 +6,11 @@
 |---|---|---|
 | `env-scripts/` | `OpenXiangShan/env-scripts` | 板卡移植 13 个补丁（12 板卡 + 1 端口自动探测；本文下半部分）|
 | `xiangshan-xvbbp/` | `OpenXiangShan/XiangShan` | XVBBP 7 条自定义指令的核心侧支持（5 个 Scala 文件）|
-| `nexus-am/` | `GaryCAICHI/nexus-am` | FFT/MIMO 板级适配（UART 25MHz、mstatus.VS、lp64d ABI）|
+| `nexus-am/` | `GaryCAICHI/nexus-am` | FFT/MIMO 板级适配 4 个（UART 25MHz、mstatus.VS、lp64d ABI、校验参考标量化）|
 
-`flows/02_clone_deps.sh` 自动拉取对应上游版本并应用全部补丁；各系列的来源与再生命令
-见各自目录的 `README.md`。
+`flows/02_clone_deps.sh` 自动拉取对应上游版本并应用 0001–0003；0004 作用于
+`apps/fft`（由官方冻结包每次覆盖），故由 `flows/09_build_xvbbp_sw.sh` 在拷贝后应用。
+各系列的来源与再生命令见各自目录的 `README.md`。
 
 ---
 

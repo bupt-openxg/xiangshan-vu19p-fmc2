@@ -83,7 +83,7 @@ ReConstruct/
 ├── patches/               ★ 三个补丁系列（各自的 README 记录来源/基线/再生方法）
 │     ├── env-scripts/      板卡移植 13 个补丁（12 板卡 + 1 端口自动探测）
 │     ├── xiangshan-xvbbp/  XVBBP 核心 5 文件补丁（xvbbp 分支）
-│     └── nexus-am/         FFT/MIMO 板级 3 个补丁（xvbbp 分支）
+│     └── nexus-am/         FFT/MIMO 板级 4 个补丁（xvbbp 分支）
 ├── third_party/           依赖克隆（flows/02 拉取；gitignored）
 │     ├── XiangShan/        香山源码（kmh-v2: @4b9ddb8；xvbbp: 0a150819+补丁+yunsuan@b4a62448）
 │     ├── env-scripts/      上游 main + 本仓库补丁（= 移植后的 FPGA 工程）
@@ -94,7 +94,7 @@ ReConstruct/
 ├── tools/                 工具箱：env.sh(环境入口) · setup/(00..08 工具链安装)
 │                          · run_hello.sh/run_linux.sh/prog_bitstream.tcl/read_probes.tcl
 │                          · patch_rtl.sh/patch_linux_dtb_clock.py/gen_ddr_xdc.py · checks/
-├── docs/                  文档：run-guide · onboard-runbook · build-log · xvbbp · board-setup
+├── docs/                  文档：run-guide · onboard-runbook · build-log · xvbbp · remote-build-handoff · board-setup
 │                          · board-diag · workload-format · rtl-check-report · evidence/(实测证据)
 ├── build/                 (gitignored) 构建产物：fpga_top_debug.bit/.ltx、日志、xvbbp/ 负载
 └── logs/                  (gitignored) 比特流构建日志
@@ -109,9 +109,9 @@ ReConstruct/
 | 解耦与核心补丁 | ✅ 核心侧增量仅 5 个 Scala 文件（+36/−3）；补丁由 `0a150819..e34d8adb` 精确生成，无无关改动；V 数据通路固定在 `GaryCAICHI/YunSuan@b4a62448` |
 | 依赖集成（flows/02）| ✅ 上游香山 @`0a150819` 浅拉 + 11 顶层/3 嵌套 submodule + yunsuan 包固定 + 本地提交（工作树干净）+ nexus-am/riscv-xvbbp/env-scripts 全部就绪 |
 | RTL 生成（flows/03）| ✅ 1821 文件；模拟器残留检查通过；ClockGate 透传；生成 RTL 含 `io_isComp/io_isConj`（VIMac64bStage1/VIMacU），确认扩展逻辑进入网表 |
-| FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 3 个 AM 板级补丁 |
-| 本机综合/比特流（flows/04）| ✅ **综合成功**：2h06m，0 errors / 0 critical warnings，峰值 31.9GB；⚠️ 本机实现布线已完成（WNS **+0.709ns**、WHS +0.010ns、0 路由错误），但 00:40 被 **systemd-oomd** 杀掉整个会话，`routed.dcp`/比特流未落盘 → 已停止本机实现，转新构建机（见 `docs/xvbbp.md` 的中断记录与恢复手段）|
-| 上板（flows/05/06/10）| ⏳ 待比特流 |
+| FFT/MIMO 离线构建（flows/09）| ✅ 官方 7 个代表镜像构建成功（smoke / FFT ext·scalar / MIMO ext·scalar）；工具链 xPack GCC 15 + 4 个 AM 板级补丁（含 `UART16550` 与标量化校验参考）|
+| 本机综合/比特流（flows/04）| ✅ 本机综合 2h06m（0 errors / 0 critical warnings，峰值 31.9GB）；实现改在 144 核/125GB 构建机从 `physopt.dcp` 续跑：**WNS +0.709ns / WHS +0.010ns / TNS=THS=0 / 0 路由错误**，产出 190MB 比特流（`docs/xvbbp.md` 记录了 oomd 中断与恢复过程）|
+| 上板（flows/05/06/10）| ✅ **全链实测通过（2026-10-20）**：裸机 Hello 回归；7 条指令逐条 PASS + `EXT instruction demo: PASS`；FFT EXT n1024/n4096 `CHECK: PASS`；MIMO EXT ZF4/MMSE2 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`；scalar 基线同样通过。证据见 `docs/evidence/xvbbp-20261020/` |
 
 ### kmh-v2 分支（2026-10-17 全链实测）
 

@@ -20,7 +20,7 @@ description: 在"上游香山 + 小补丁 + YunSuan 包"方式下集成/维护 X
   （FFT/MIMO）。AM 入口 `0x80000000`，UART `0x310b0000`。
 - 配置 `MinimalConfig`（8-wide / ROB48 / L1D 32KB / L2 128KB×2 / L3 4MB）。
 
-## 三条必踩的坑（都已修，改动前先读）
+## 五个必踩的坑（都已修，改动前先读）
 
 1. **工作树必须干净**：flows/02 在香山仓库内把补丁 + yunsuan gitlink 落成本地提交
    （如 `local: xvbbp core support ...`）。香山把 dirty 写进生成 RTL。
@@ -29,7 +29,15 @@ description: 在"上游香山 + 小补丁 + YunSuan 包"方式下集成/维护 X
    - xPack 默认 ABI 是 ilp32 → `patches/nexus-am/0003` 显式 `-mabi=lp64d`；
    - AM 源码按 50MHz 算 UART 分频 → `patches/nexus-am/0001` 改 14（25MHz）；
    - AM 只置了 `mstatus.FS` → `patches/nexus-am/0002` 置 `VS=Initial`。
-3. **MIMO 产物按后端同名**：`mimo-ext.bin`/`mimo-scalar.bin`，不同 kernel 会互相覆盖；
+3. **构建 AM 镜像必须 `CPPFLAGS=-DUART16550=1`**（flows/09 已内置）：本板 UART 是
+   16550 @ `0x310b0000`；默认 uartlite @ `0x40600000` 不存在，CPU 首次 putchar
+   即挂死（串口全空、VIO 的 cfg/ddr/uart 计数器冻结）。该宏不在 AM Makefile 依赖里，
+   切换后端要清 `am/build`（flows/09 每次清）。
+4. **FFT 的 OAI 校验参考必须标量化**（`patches/nexus-am/0004`）：ext/rvv 镜像用
+   `-march=rv64gcv` 时 SIMDe 把参考的 SSE `dft16` 映射成 RVV，本核上重复调用约
+   5 次后卡死；只把 `oai_dfts.o` 编成 `-march=rv64gc`。EXT/RVV 内核本身正常，
+   `smoke`（n16）和 scalar 基线可作为对照。
+5. **MIMO 产物按后端同名**：`mimo-ext.bin`/`mimo-scalar.bin`，不同 kernel 会互相覆盖；
    flows/09 每次构建后立刻复制到 `build/xvbbp/<key>.bin` 并写 `images.tsv`。
 
 ## 流程
@@ -39,19 +47,25 @@ flows/00_host_check.sh
 flows/01_setup_toolchain.sh       # 含 02 mill(0.12.15 launcher)、07 libc 头、08 xPack GCC15
 flows/02_clone_deps.sh            # 香山+yunsuan 固定+核心补丁+nexus-am+riscv-xvbbp+env-scripts
 flows/03_gen_rtl.sh               # make verilog CONFIG=MinimalConfig JVM_XMX=20G
-flows/04_build_bitstream.sh       # 约 7h；8-wide 工作集 ~90-110GB（15GB 机器会 swap 抖动）
+flows/04_build_bitstream.sh       # 约 4-7h（综合峰值 ~32GB；实现建议 ≥64GB）
 flows/05_program_fpga.sh
 flows/06_run_hello.sh             # 回归
 flows/09_build_xvbbp_sw.sh        # 默认代表集；ALL=1 构建官方 48 FFT + 12 MIMO
 flows/10_run_xvbbp.sh smoke       # 期望 EXT instruction demo: PASS
+flows/10_run_xvbbp.sh fft-ext-1024
+flows/10_run_xvbbp.sh fft-ext-4096
 flows/10_run_xvbbp.sh mimo-ext-zf4
+flows/10_run_xvbbp.sh mimo-ext-mmse2
 ```
 
-## 验证要点
+## 验证要点（2026-10-20 全链已通过）
 
 - RTL 中应能 grep 到 `Zvbaseband`/`VSCADDRTQ`（decode）与 VIMacU 的 `isComp/isConj`。
-- `flows/10` 判据：smoke/fft 需 `EXT instruction demo: PASS` 且无 `Mismatch`；
-  mimo 需 `MIMO_VALIDATE_PASS` + `MIMO_DONE`。
+- `flows/10` 判据：smoke/fft-ext 需 `EXT instruction demo: PASS` + `CHECK: PASS`；
+  fft-scalar 需 `CHECK: PASS`；mimo 需 `MIMO_VALIDATE_PASS` + `MIMO_DONE`。
+- 实测：smoke 7 条指令逐条 PASS；fft-ext n1024/n4096 CHECK PASS；
+  mimo-ext zf4 fail=0 max_abs=10/11、mmse2 fail=0 max_abs=7/11；scalar 基线通过。
+  证据：`docs/evidence/xvbbp-20261020/`。
 - MIMO 的 `.bin` 因 `.bss` 置零约 1–4MB，JTAG 写入是分钟级，不是卡死。
 - `dft_rvv` 后端依赖香山对相应 RVV 指令的实现，不作为硬性目标；ext/scalar 是必跑项。
 
@@ -62,3 +76,7 @@ flows/10_run_xvbbp.sh mimo-ext-zf4
   在 XiangShan 目录会用 0.12.15（首次下载到 `~/.cache/mill`），属正常。
 - `unable to find library -lriscv` / 头文件缺失：`tools/setup/07` 未装
   `libgcc-13-dev/libc6-dev/linux-libc-dev-riscv64-cross`。
+- 串口全空且 VIO 的 `dbg_cfg_ar_cnt/dbg_ddr_ar_cnt/dbg_uart_tx_edges` 停止增长：
+  镜像没带 `-DUART16550=1`，CPU 卡在 uartlite 地址上；重建（flows/09 已内置）。
+- FFT 打印完 demo 后停在 `dft16`/参考计算：确认 `oai_dfts.o` 以 `-march=rv64gc`
+  编译（`patches/nexus-am/0004`），可用 `objdump -d | grep -c '^ *v'` 快速核对。

@@ -20,7 +20,7 @@
 - **YunSuan 包**：`GaryCAICHI/YunSuan@b4a62448b1539ab875daf36a62fe9cf6bc2fbe7b`
   （分支 `kunminghu-v2-xvbbp`；`flows/02` 显式固定并记录到香山本地提交）
 - **软件**：`GaryCAICHI/nexus-am@9dc5f1e1` + `bupt-openxg-lab/riscv-xvbbp@c553928` 的 apps
-- **板级**：本仓库 `patches/env-scripts/`（13 个：12 板卡 + 0013 端口自动探测，原 V2 流程已验证）+ `patches/nexus-am/`（3 个）
+- **板级**：本仓库 `patches/env-scripts/`（13 个：12 板卡 + 0013 端口自动探测，原 V2 流程已验证）+ `patches/nexus-am/`（4 个）
 - 配置：`MinimalConfig`（8-wide / ROB48 / L1D 32KB / L2 128KB×2 / L3 4MB）
 
 > 官方板级仓库 `bupt-openxg-lab/xiangshan-vu19p-fmc2` 计划稍后发布；本方案不依赖它，
@@ -80,9 +80,13 @@ flows/04_build_bitstream.sh  # 工程 + 综合 + 实现 + 比特流（约 7h）
 - 0a150819 的 Makefile 在非 `FPGA=1` 时自动附加
   `--fpga-platform --reset-gen --ignore-read-enable-mem`；顶层端口仍有
   `io_riscv_halt_0/io_dma_*`，沿用 `patches/env-scripts/` 的 V2 路径。
-- 8-wide 后期线路的综合 elaboration 工作集约 90–110GB。**15GB 机器只会 swap 抖动**；
-  推荐 ≥64GB RAM（128GB 更稳）。本仓库会在本机尝试并在 `docs/evidence/` 记录结论；
-  若受阻，`third_party/` 可整体复制到大机器后用同一组 flows 重建。
+- 实测：15GB 本机完成综合（2h06m，峰值 31.9GB，靠 128GB swap），但实现阶段被
+  systemd-oomd 连带杀掉会话。最终实现/布线/比特流在 144 核 / 125GB 构建机上完成：
+  从 `fpga_top_debug_physopt.dcp` 续跑（`tools/resume_impl_route.tcl`，约 50 分钟），
+  **WNS +0.709ns / WHS +0.010ns / 0 failing endpoints / 0 路由错误**，比特流 190MB。
+  大机器全流程同样适用 `flows/00-04`；离线交接方法见
+  [remote-build-handoff.md](remote-build-handoff.md)（本机 `build/handoff/` 已生成，
+  含 dcp/RTL/env-scripts/bundle，可 rsync 到无 GitHub 访问的机器）。
 
 ## 5. 裸机负载构建与运行
 
@@ -119,10 +123,19 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 - **必须用 xPack GCC 15**（`tools/setup/08`）：上游冻结代码用 GCC 14+ 的 RVV
   intrinsic 签名（如 `vssra` 显式 `vxrm`），本仓库的 GCC 13.3 编译 MIMO 会报
   “too many arguments”。
+- **必须带 `CPPFLAGS=-DUART16550=1`**（`flows/09` 已内置）：本板 UART 是
+  **16550 @ `0x310b0000`**；AM 默认链的是 uartlite @ `0x40600000`。首次 putchar
+  写不存在的设备会让 CPU 挂死，串口全空、VIO 计数器冻结。该宏未纳入 AM 的
+  Makefile 依赖，切换后端时须清 `am/build`（`flows/09` 每次清理）。
+- **FFT 校验参考必须标量化**（`patches/nexus-am/0004`）：ext/rvv 镜像用
+  `-march=rv64gcv` 时 SIMDe 会把 OAI 参考的 SSE `dft16` 映射成 RVV；该参考在本核
+  重复调用约 5 次后卡死（`vlse64/vslideup/vrgather` 序列），而 **EXT/RVV 内核本身
+  完全正常**。因此只把 `oai_dfts.o` 编成 `-march=rv64gc`；标量参考与向量内核逐位
+  一致（scalar 镜像的 `CHECK: PASS` 即为对照）。
 - AM 镜像的 `.bin` 含 `.bss`（objcopy 置为 alloc,contents），MIMO 约 4MB，
   JTAG 写入比 Hello 慢（分钟级），属正常。
-- EXT 代码用 `.word` 原样编码（不依赖编译器识别自定义指令）；
-  `dft_rvv` 后端需要香山实现对应 RVV 指令，**不作为本轮硬性目标**。
+- EXT 代码用 `.word` 原样编码（不依赖编译器识别自定义指令）。`dft_rvv` 后端未在
+  本轮上板（参考实现同样受上述 SIMDe 问题影响），EXT 后端已覆盖 7 条指令。
 
 ## 6. 已验证 / 待验证
 
@@ -130,13 +143,27 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
 |---|---|
 | 核心补丁生成（5 文件、122 行 diff，无无关改动）| ✅ |
 | 依赖集成（flows/02：香山+yunsuan+nexus-am+riscv-xvbbp+env-scripts）| ✅ |
-| AM 工具链（xPack GCC 15 + 3 个补丁）| ✅ 离线构建通过（FFT n16/n1024/n4096、MIMO ext/scalar）|
+| AM 工具链（xPack GCC 15 + 4 个补丁）| ✅ 离线构建通过（FFT n16/n1024/n4096、MIMO ext/scalar）|
 | RTL 生成与残留检查（flows/03）| ✅ 1821 文件；残留检查通过；`io_isComp/io_isConj` 已在 VIMac64bStage1/VIMacU |
 | 本机综合（flows/04）| ✅ **综合成功**（2h06m，0 errors / 0 critical warnings，峰值 31.9GB）|
-| 本机实现 | ⚠️ **布线已完成**（WNS **+0.709ns**、WHS +0.010ns、0 failing endpoints、0 路由错误），但 2026-10-19 00:40 被 **systemd-oomd** 杀掉整个 ZCode 会话（用户 slice 内存压力 69%>50% 持续 20s），`routed.dcp` 未落盘；已停止本机实现，转新构建机 |
-| 比特流 / 上板 | ⏳ 待新构建机 |
-| 板上 Hello 回归 | ⏳ |
-| 板上 7 指令冒烟 / FFT / MIMO | ⏳ |
+| 实现/布线/比特流 | ✅ 144 核构建机从 physopt 续跑：**WNS +0.709ns / WHS +0.010ns / TNS=THS=0 / 0 路由错误**，190MB 比特流 |
+| 板上 Hello 回归 | ✅ `Hello, XiangShan! (MinimalConfig on PHINE PD-VU19P, 115200 8N1)` |
+| 板上 7 指令冒烟 | ✅ 7 条逐条 PASS + `EXT instruction demo: PASS` + `CHECK: PASS` |
+| 板上 FFT EXT | ✅ n1024 / n4096 均 `CHECK: PASS`（另 scalar n1024 基线通过）|
+| 板上 MIMO EXT | ✅ ZF 4x4 / MMSE 2x2 均 `MIMO_VALIDATE_PASS`（fail=0）+ `MIMO_DONE`（另 scalar ZF4 基线通过）|
+
+### 上板实测（2026-10-20）
+
+| 负载 | 关键结果 |
+|---|---|
+| smoke（官方 EXT n16）| `EXT demo vscmul/vscmulcj/vscmacc/vscmacccj/vscaddconj/vscaddrq/vscaddrtq : PASS`；`CHECK: PASS`；exit 0 |
+| fft-ext-1024 | `EXT instruction demo: PASS`；`CHECK: PASS`；exit 0 |
+| fft-ext-4096 | `CHECK: PASS`；exit 0 |
+| mimo-ext-zf4 | `MIMO_VALIDATE_PASS kernel=eq_zf_4x4 count=62400 tol=11 fail=0 max_abs=10` |
+| mimo-ext-mmse2 | `MIMO_VALIDATE_PASS kernel=eq_mmse_2x2 count=31200 tol=11 fail=0 max_abs=7` |
+
+比特流 SHA256、完整串口日志与复现命令见
+`docs/evidence/xvbbp-20261020/`。比特流本身（190MB）在 `build/`，不入库。
 
 ### 本机中断记录与恢复手段
 
@@ -149,6 +176,9 @@ flows/10_run_xvbbp.sh mimo-ext-zf4   # 期望 MIMO_VALIDATE_PASS / MIMO_DONE
   `ManagedOOMPreference=avoid`），避免 oomd 连带杀掉交互会话。
 - 新构建机（内存充足）建议直接 `flows/00-04` 全流程；若想省掉综合+布局，也可把
   `fpga_top_debug_physopt.dcp`（约 622MB）+ `tools/resume_impl_route.tcl` 拷过去续跑。
+- **2026-10-20 已按上述路径完成**：离线包经 rsync 传到构建机
+  `~/zhaoleo/XS_Build`（无 GitHub 访问），physopt 续跑约 50 分钟得到比特流，
+  时序与中断前完全一致（+0.709/+0.010），随后回传本机烧录。
 
 ## 7. 许可与致谢
 
