@@ -9,7 +9,7 @@
 PHINE PD-VU19P-2-LSI SOLO v3，运行 BUPT `riscv-xvbbp` 的 FFT/MIMO 裸机负载。
 **没有 Linux。**
 
-**服务器只做综合/实现/比特流**；源码、overlay、RTL 生成、软件构建、烧录、
+**综合/实现/比特流由独立构建机完成**；源码、overlay、RTL 生成、软件构建、烧录、
 源码、RTL 生成、软件构建、烧录和测试在烧录机完成；综合/实现可交给独立的构建机。
 
 ## 黄金规则
@@ -47,7 +47,7 @@ flows/01_setup_toolchain.sh
 flows/02_clone_deps.sh          # 官方 clone + BUPT overlay + 板级 overlay
 flows/03_gen_rtl.sh             # make verilog + patch_rtl + rtl_check
 flows/04_package_server.sh      # 只打包 RTL/env-scripts/build_server.tcl
-# → 服务器：make project + build_server.tcl（synth/impl/bit）
+# → 构建机：make project + build_server.tcl（synth/impl/bit）
 flows/05_program_fpga.sh        # FPGA_BIT_HOME=... 指定 bit/ltx
 tests/bupt/ddr16_check.tcl      # 16GB 读写，DDR16G_PASS
 flows/09_build_bupt_sw.sh       # 48 FFT + 12 MIMO
@@ -59,18 +59,17 @@ flows/10_run_bupt.sh            # 上板并判定
 - `DifftestMacros.svh` 不在 include_dirs；`flows/04` 会复制到 `rtl/rtl/`。
 - FFT 的 `oai_dfts.o` 必须 `-march=rv64gc`，否则 SIMDe SSE dft16 映射到 RVV 卡死。
 - AM 必须 `CPPFLAGS=-DUART16550=1`，ABI lp64d，`mstatus.VS=Initial`。
-- 综合/实现只在服务器跑；`report_power` 是 impl 前置步骤，125GB 机器可正常完成。
+- 综合/实现只在构建机跑；`report_power` 是 impl 前置步骤。
 - `DDR_RANK_WIDTH=1` 是 16GB 1Rx8；2 是 2Rx8，不要混。
 - 改 DDR 配置后必须重新综合，不能复用旧 bit。
 
 ## 目录
 
 ```
-flows/      00..10（04 只打包，综合在服务器）
+flows/      00..10（04 只打包，综合在构建机）
 overlays/   board/{nexus-am,env-scripts} · local/xiangshan/VIMacU.scala
 tests/      bupt/{build.sh,run.sh,ddr16_check.tcl} · common/
 patches/    env-scripts/ 板卡 13 个补丁
 tools/      env.sh · setup/ · patch_rtl.sh · checks/ · build_server.tcl
 hw/         引脚表 / 板卡诊断
-docs/       板卡、构建、证据
 ```

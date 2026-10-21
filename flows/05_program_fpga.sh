@@ -2,7 +2,7 @@
 # =============================================================================
 # 05 烧录比特流到 FPGA（JTAG; 约 3 分钟）
 #   比特流来源: ${FPGA_BIT_HOME:-build}/fpga_top_debug.bit + .ltx
-#   服务器综合产物回传后，用 FPGA_BIT_HOME=artifacts/xvbbp-buptopenxg 指定。
+#   综合机构建产物回传后，用 FPGA_BIT_HOME="$BIT_DIR" 指定。
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,7 +11,7 @@ source "$ROOT/tools/env.sh" >/dev/null 2>&1 || true
 BIT_HOME="${FPGA_BIT_HOME:-$BUILD_ROOT}"
 [ -f "$BIT_HOME/fpga_top_debug.bit" ] || {
     echo "ERROR: 未找到 $BIT_HOME/fpga_top_debug.bit"
-    echo "  先用 flows/04_package_server.sh 打包，在服务器综合后把 bit/ltx 回传"
+    echo "  先用 flows/04_package_server.sh 打包，在综合机构建后把 bit/ltx 回传"
     echo "  或设置 FPGA_BIT_HOME 指向已有 bit/ltx 的目录"
     exit 1
 }

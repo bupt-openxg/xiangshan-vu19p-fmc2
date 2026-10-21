@@ -57,6 +57,5 @@ git -c user.name=ReConstruct -c user.email=reconstruct@local \
 
 ## 上游对照与许可
 
-- 上游仓库：<https://github.com/OpenXiangShan/env-scripts>（Apache-2.0）
+- 上游仓库：<https://github.com/OpenXiangShan/env-scripts>（Mulan PSL v2）
 - 本补丁系列仅修改 `fpga_diff/` 下的 22 个文件；其余子项目未改动
-- 详细调试过程与根因分析见 [`docs/build-log.md`](../docs/build-log.md)

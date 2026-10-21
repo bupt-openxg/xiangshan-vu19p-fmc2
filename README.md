@@ -85,8 +85,7 @@ UART 使用 16550，基地址 `0x310b0000`，115200 8N1；25 MHz 下分频系数
 │   └── common/            单次上板启动与串口抓取
 ├── tools/                 env.sh、setup/、patch_rtl.sh、checks/、build_server.tcl
 ├── hw/                    引脚表与板卡诊断
-├── patches/env-scripts/   板卡移植补丁
-└── docs/                  板卡、构建与 RTL 检查文档
+└── patches/env-scripts/   板卡移植补丁
 ```
 
 ## 4. 复现步骤

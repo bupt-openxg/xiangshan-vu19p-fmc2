@@ -15,7 +15,7 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 
 ```
 00 宿主检查(Vivado/磁盘≥80G)   01 工具链(全部本地化到 tools/, 无需 sudo)
-02 拉依赖+overlay      03 RTL(20-40min)   04 打包服务器输入   05 烧录
+02 拉依赖+overlay      03 RTL(20-40min)   04 打包综合输入   05 烧录
 06 Hello                08 板卡诊断(~20min)   09 构建 BUPT 负载   10 上板测试
 ```
 

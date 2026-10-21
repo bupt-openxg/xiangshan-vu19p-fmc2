@@ -1,6 +1,6 @@
 ---
 name: xvbbp-integration
-description: 在官方 XiangShan/YunSuan 上以 BUPT overlay 集成 XVBBP 7 条 Q15 复数向量指令、构建并运行 BUPT FFT/MIMO 负载时使用。覆盖 overlay 文件清单、GCC15/AM 板级适配、16GB DDR、服务器综合与上板判据。触发词：xvbbp、vscmul、vscmacc、vscaddrq、FFT、MIMO、nexus-am、Vimac、VialuF。
+description: 在官方 XiangShan/YunSuan 上以 BUPT overlay 集成 XVBBP 7 条 Q15 复数向量指令、构建并运行 BUPT FFT/MIMO 负载时使用。覆盖 overlay 文件清单、GCC15/AM 板级适配、16GB DDR、构建机综合与上板判据。触发词：xvbbp、vscmul、vscmacc、vscaddrq、FFT、MIMO、nexus-am、Vimac、VialuF。
 ---
 
 # XVBBP 集成与负载（本仓库视角）

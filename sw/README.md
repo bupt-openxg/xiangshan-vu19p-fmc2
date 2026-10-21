@@ -30,4 +30,4 @@ make -C sw/baremetal
 4. UART 16550 必须程序自设分频：`LCR=0x83 → DLL=14, DLM=0 → LCR=0x03`。
 
 写入与运行：`tests/common/board_run.sh` 或 `flows/06_run_hello.sh`。
-负载文本格式见 `docs/workload-format.md`。
+负载文本由 `tools/bin/bin2fpgadata` 生成。

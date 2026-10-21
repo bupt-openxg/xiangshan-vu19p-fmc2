@@ -10,7 +10,7 @@
 # =============================================================================
 set -uo pipefail
 RTL_DIR="${1:?用法: rtl_check.sh <build/rtl 目录> [报告输出]}"
-REPORT="${2:-docs/rtl-check-report.md}"
+REPORT="${2:-build/check/rtl-check-report.md}"
 mkdir -p "$(dirname "$REPORT")"
 
 # 门控感知扫描: 输出 pattern 在"无保护"区域命中的行 (排除 module 定义行)

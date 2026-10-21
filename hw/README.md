@@ -19,13 +19,13 @@ hw/diag/      板卡诊断比特流（独立小工程, 分钟级构建, 上板�
 | 时钟 | AEConsole PLL 输出（见下表）；板载 200MHz OSC |
 | 按键/开关 | **流程完全不使用**——复位/启动全部经 VIO + Tcl 控制 |
 
-## 2. AEConsole 时钟配置（一次性，详见 docs/board-setup.md）
+## 2. AEConsole 时钟配置（一次性）
 
 | PLL 输出 | 引脚 | 频率 | 用途 |
 |---|---|---|---|
 | GC02 | BM44/BN44 | **80MHz** | DDR4 参考时钟（clk7） |
 | GC04 | BA51/BB51 | **25MHz** | CPU/系统时钟（clk5，本设计主时钟）|
-| GC06 | E57/E58 | **1MHz** | RTC（clk8，OpenSBI 计时基准）|
+| GC06 | E57/E58 | **1MHz** | RTC（clk8，计时基准）|
 | —（板载 OSC）| BW37/BY37 | 200MHz | 系统参考（clk6）|
 
 另需将 **VADJ 设为 1.2V**（FMC2/DDR bank 电压）。AEConsole 可从厂商 BSP
@@ -54,4 +54,4 @@ vivado -mode batch -source hw/diag/build_diag.tcl     # → hw/diag/proj/.../*.b
 vivado -mode tcl   -source hw/diag/scripts/run_diag.tcl
 ```
 
-用途与实测结论见 [docs/board-diag.md](../docs/board-diag.md)。
+以上探针和时钟计数用于上板前的快速自检。

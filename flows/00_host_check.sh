@@ -28,14 +28,14 @@ if [ -n "${mem:-}" ]; then
     if [ "$mem" -ge 32 ]; then
         ok "RAM ${mem}GB"
     else
-        warn "RAM ${mem}GB：本机只做 RTL 生成/软件构建/上板；建议 ≥32GB（Mill 生成 RTL）。Vivado 综合在服务器上跑（125GB）"
+        warn "RAM ${mem}GB：本地只做 RTL 生成/软件构建/上板；建议 ≥32GB（Mill 生成 RTL）。Vivado 综合在构建机上执行"
     fi
 fi
 if [ -n "${swap:-}" ]; then
     if [ "$swap" -ge 16 ]; then
         ok "swap ${swap}GB"
     else
-        warn "swap ${swap}GB（RTL 生成辅助项；综合在服务器上跑，本机建议 ≥16GB）"
+        warn "swap ${swap}GB（RTL 生成辅助项；综合在构建机上执行，本地建议 ≥16GB）"
     fi
 fi
 
