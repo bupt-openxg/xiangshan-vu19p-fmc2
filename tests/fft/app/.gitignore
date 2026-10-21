@@ -1,0 +1,9 @@
+/build/
+/archive/
+/docs/
+/evidence/
+/perf_eval/
+*.elf
+*.bin
+*.log
+*.txt

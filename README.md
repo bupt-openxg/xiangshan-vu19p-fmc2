@@ -67,6 +67,18 @@ flows/11_build_am_bench.sh       # NEMU/AM 复杂测试：Dhrystone / CoreMark /
 flows/10_run_xvbbp.sh build/am-bench/coremark-2iter.bin
 ```
 
+课题二测试方案（任务一）的用例已移植到 `tests/`（ext-instruction-test / random / fft / mimo），
+脚本、判定口径和与文档的差异见 [tests/README.md](tests/README.md)：
+
+```bash
+tests/ext-instruction-test/run.sh     # 整核给定激励 52 例
+tests/random/run.sh                   # 7 条扩展指令随机差分（默认 10^6，可调）
+tests/fft/run_functional.sh           # FFT 功能 140 项
+tests/fft/run_performance.sh          # FFT 性能 14 组
+tests/mimo/run_functional.sh          # MIMO 功能 16 项
+tests/mimo/run_performance.sh         # MIMO 性能 4 组
+```
+
 - 该分支**不包含 Linux**；核心侧只加了 5 个文件（见 `patches/xiangshan-xvbbp/`），
   运算数据通路在 `GaryCAICHI/YunSuan@b4a62448` 这个 Scala 包里（flows/02 固定 SHA）。
 - 软件必须用 xPack GCC 15（`tools/setup/08`，flows/01 自动安装），且 AM 镜像必须带
@@ -94,6 +106,7 @@ ReConstruct/
 │     └── riscv-xvbbp/      (xvbbp) 冻结的 FFT/MIMO 软件包
 ├── hw/                    硬件：pinmaps/(引脚表) · diag/(板卡诊断设计) · README
 ├── sw/                    软件负载：baremetal/(裸机源码+Makefile) · linux/(镜像获取与修正) · xvbbp/(负载说明)
+├── tests/                 ★ 课题二测试方案移植：ext-instruction-test · random · fft · mimo
 ├── tools/                 工具箱：env.sh(环境入口) · setup/(00..08 工具链安装)
 │                          · run_hello.sh/run_linux.sh/prog_bitstream.tcl/read_probes.tcl
 │                          · patch_rtl.sh/patch_linux_dtb_clock.py/gen_ddr_xdc.py · checks/

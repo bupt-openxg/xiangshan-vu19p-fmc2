@@ -1,0 +1,29 @@
+# FFT Scripts
+
+- 这个目录只放 `apps/fft` 自己长期保留的脚本入口和工具。
+- 新 Goal 的 preflight 入口是 [`run_fft_preflight_detached.sh`](./run_fft_preflight_detached.sh) 和 [`run_fft_preflight_matrix_detached.sh`](./run_fft_preflight_matrix_detached.sh)；它们只允许把产物写入 `evidence/<candidate_id>/<run_id>/`。
+- preflight 构建统一传入 `FFT_EVIDENCE_ONLY=1`；Makefile 会拒绝把构建输出路径解析到 `evidence/` 之外。
+- [`generate_fft_corpus.py`](./generate_fft_corpus.py) 生成与 `evidence/corpora/README.md` 一致的确定性输入；[`parse_fft_validation.py`](./parse_fft_validation.py) 解析 bit-exact 对拍结果。
+- [`analyze_fft_reference_saturation.py`](./analyze_fft_reference_saturation.py) 独立复现 Q15 reference dataflow，交叉验证 OAI checksum 并输出 reference-operation saturation/overflow audit；不进入 DUT 性能 binary。
+- [`analyze_fft_float_reference.py`](./analyze_fft_float_reference.py) 用独立 binary64 radix-2 FFT 诊断固定点结果的误差、EVM、能量和 Parseval 偏差；只生成 evidence 质量报告，不进入 DUT 性能 binary，也不替代 bit-exact gate。
+- official 入口为 [`run_fft_official_matrix_detached.sh`](./run_fft_official_matrix_detached.sh)；单 workload 由 [`run_fft_official_detached.sh`](./run_fft_official_detached.sh) 启动，EMU ROI/HPM 由 [`parse_fft_emu_report.py`](./parse_fft_emu_report.py) 解析。它们只允许写入 `evidence/`。
+- 下面未标记为 preflight 的旧入口仍是 legacy 脚本，尚未完成 evidence-only 适配，不得用于新 Goal。
+- [`run.sh`](./run.sh) 是内部统一执行器，负责单个 workload 的 build / validate / emu 运行；批量脚本统一调用它。
+- 常用入口：
+  - [`run_detached.sh`](./run_detached.sh)：单个 workload 后台运行
+  - [`run_rvv_mainline_canonical_sweep_detached.sh`](./run_rvv_mainline_canonical_sweep_detached.sh)：当前 RVV 主线全点数正式 sweep
+  - [`run_ext_mainline_canonical_sweep_detached.sh`](./run_ext_mainline_canonical_sweep_detached.sh)：当前 EXT 主线全点数正式 sweep
+  - [`refresh_perf_eval_detached.sh`](./refresh_perf_eval_detached.sh)：全量刷新正式 `perf_eval/`
+  - [`refresh_perf_eval_scalar_rvv_ext_detached.sh`](./refresh_perf_eval_scalar_rvv_ext_detached.sh)：按当前维护口径顺序刷新 `scalar` / `rvv` / `ext`
+  - [`run_canonical_baseline_sweep_detached.sh`](./run_canonical_baseline_sweep_detached.sh)：scalar + rvv canonical baseline sweep
+- 常用 Python 工具：
+  - [`gen_fft_perf_reports.py`](./gen_fft_perf_reports.py)
+  - [`gen_fft_rvv_reports.py`](./gen_fft_rvv_reports.py)
+  - [`gen_fft_ext_reports.py`](./gen_fft_ext_reports.py)
+  - [`organize_fft_perf_layout.py`](./organize_fft_perf_layout.py)
+  - [`organize_fft_perf_reports.py`](./organize_fft_perf_reports.py)
+- 诊断类入口：
+  - [`run_measure_mode_pair_detached.sh`](./run_measure_mode_pair_detached.sh)
+  - [`run_scalar_warmup_probe_detached.sh`](./run_scalar_warmup_probe_detached.sh)
+  - [`run_steady_state_convergence_sweep_detached.sh`](./run_steady_state_convergence_sweep_detached.sh)
+  - [`run_volatility_diagnostic_sweep.sh`](./run_volatility_diagnostic_sweep.sh)
