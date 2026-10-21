@@ -10,7 +10,7 @@ PHINE PD-VU19P-2-LSI SOLO v3，运行 BUPT `riscv-xvbbp` 的 FFT/MIMO 裸机负�
 **没有 Linux。**
 
 **服务器只做综合/实现/比特流**；源码、overlay、RTL 生成、软件构建、烧录、
-测试全部在本机完成。服务器目录固定为 `~/.zhaoleo/xvbbp-buptopenxg`。
+源码、RTL 生成、软件构建、烧录和测试在烧录机完成；综合/实现可交给独立的构建机。
 
 ## 黄金规则
 

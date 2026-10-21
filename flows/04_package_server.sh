@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 04 打包服务器综合所需输入（本机不做综合）
+# 04 打包综合所需输入（生成 RTL 与 env-scripts 归档）
 #   产物: build/bupt-server-<date>/{rtl.tar.zst,env-scripts-src.tar.zst,
 #                                 build_server.tcl,SHA256SUMS}
-#   服务器目录: ~/.zhaoleo/xvbbp-buptopenxg（只放 RTL + env-scripts + 脚本）
+#   综合机只需 RTL + env-scripts + build_server.tcl
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -38,22 +38,26 @@ cp -f "$ROOT/tools/build_server.tcl" "$OUT/build_server.tcl"
 
 cat <<EOF
 
-==== 服务器输入就绪 ====
+==== 综合输入就绪 ====
 $(du -h "$OUT"/* | sed 's/^/  /')
 
-上传:
-  scp -P 22103 "$OUT"/{rtl.tar.zst,env-scripts-src.tar.zst,build_server.tcl,SHA256SUMS} \\
-      turing@10.156.64.60:~/.zhaoleo/xvbbp-buptopenxg/
+复制到综合机（按实际环境替换）:
+  BUILD_HOST=user@synthesis-host
+  BUILD_DIR=/path/to/xvbbp-build
+  ssh "\$BUILD_HOST" "mkdir -p '\$BUILD_DIR'"
+  scp "$OUT"/* "\$BUILD_HOST:\$BUILD_DIR/"
 
-服务器:
-  cd ~/.zhaoleo/xvbbp-buptopenxg
+综合机上执行:
+  cd "\$BUILD_DIR"
   sha256sum -c SHA256SUMS
+  mkdir -p rtl env-scripts out
   tar --use-compress-program='zstd -d' -xf rtl.tar.zst -C rtl
-  tar --use-compress-program='zstd -d' -xf env-scripts-src.tar.zst -C env-scripts --strip-components=1
-  source ~/zhaoleo/Xilinx/Vivado/2024.2/settings64.sh
+  tar --use-compress-program='zstd -d' -xf env-scripts-src.tar.zst \\
+      -C env-scripts --strip-components=1
+  source /path/to/Vivado/2024.2/settings64.sh
   cd env-scripts/fpga_diff
-  make project CPU=kmh NO_DIFF=1 DDR_RANK_WIDTH=1 CORE_DIR="\$HOME/.zhaoleo/xvbbp-buptopenxg/rtl"
+  make project CPU=kmh NO_DIFF=1 DDR_RANK_WIDTH=1 CORE_DIR="\$BUILD_DIR/rtl"
   vivado -mode batch -source ../../build_server.tcl -tclargs \\
       "\$PWD/fpga_vivado_kmh-nodiff/fpga_vivado_kmh-nodiff.xpr" \\
-      "\$HOME/.zhaoleo/xvbbp-buptopenxg/out" 16
+      "\$BUILD_DIR/out" 16
 EOF

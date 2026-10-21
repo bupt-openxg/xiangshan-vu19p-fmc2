@@ -49,16 +49,16 @@ opcode `0x57`，funct3 `000`，SEW=16，固定寄存器 vd=v16 / vs2=v20 / vs1=v
 5. MIMO 必须 xPack GCC 15；ABI `lp64d`；`mstatus.VS=Initial`。
 6. 16GB 1Rx8 用 `MT40A2G8VA-062E`（Components，AXI 34），不是 2Rx8 SODIMM
    preset，也不是 `DDR_RANK_WIDTH=2`。CPU 侧地址会先减 `0x80000000` 再进 MIG。
-7. 服务器只跑 synth/impl；`report_power` 是 impl 前置步骤，125GB 机器可正常完成，不要在本机重跑。
+7. 综合/实现只在大内存构建机执行；`report_power` 是 impl 前置步骤。
 
 ## 流程
 
 ```bash
 flows/02_clone_deps.sh
 flows/03_gen_rtl.sh
-flows/04_package_server.sh      # 上传 build/bupt-server-<date>/
-# 服务器 ~/.zhaoleo/xvbbp-buptopenxg：make project + build_server.tcl
-FPGA_BIT_HOME=artifacts/xvbbp-buptopenxg flows/05_program_fpga.sh
+flows/04_package_server.sh      # 上传 build/bupt-server-*/
+# 构建机：make project + build_server.tcl
+FPGA_BIT_HOME="$BIT_DIR" flows/05_program_fpga.sh
 vivado -mode batch -source tests/bupt/ddr16_check.tcl -tclargs .../fpga_top_debug.ltx
 flows/09_build_bupt_sw.sh
 FPGA_BIT_HOME=... flows/10_run_bupt.sh

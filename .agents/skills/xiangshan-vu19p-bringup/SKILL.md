@@ -19,7 +19,7 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 06 Hello                08 板卡诊断(~20min)   09 构建 BUPT 负载   10 上板测试
 ```
 
-命令与预期输出见 `README.md` §5。综合在服务器 `~/.zhaoleo/xvbbp-buptopenxg`，本机不做。跳过构建：把现成的 `fpga_top_debug.bit/.ltx` 放进 `FPGA_BIT_HOME` 指向的目录。
+命令与预期输出见 `README.md` §4。综合/实现在独立构建机执行。跳过构建时，把现成的 `fpga_top_debug.bit/.ltx` 放进 `FPGA_BIT_HOME` 指向的目录。
 
 ## submodule 陷阱（flows/02 已自动处理；手工操作必须知道）
 

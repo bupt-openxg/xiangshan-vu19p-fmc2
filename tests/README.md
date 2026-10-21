@@ -8,8 +8,7 @@
 - 其中 `ext` 后端的 FFT n16 镜像同时作为 7 条 XVBBP 指令的冒烟测试
   （打印 `EXT instruction demo: PASS`）。
 
-不再包含仓库外的 52 例整核激励、随机差分、140 项 FFT 功能矩阵、16 项 MIMO
-功能矩阵和性能脚本。负载源码不复制进本仓库，构建时从
+测试范围与 BUPT 仓库保持一致。负载源码不复制进本仓库，构建时从
 `third_party/riscv-xvbbp/software/nexus-am/apps` 临时安装到官方 nexus-am。
 
 ## 构建
@@ -32,7 +31,8 @@ tests/bupt/build.sh
 串口默认 `/dev/ttyUSB0`，115200 8N1。
 
 ```bash
-export FPGA_BIT_HOME="$PWD/artifacts/xvbbp-buptopenxg"
+export BIT_DIR=/path/to/bitstream
+export FPGA_BIT_HOME="$BIT_DIR"
 tests/bupt/run.sh
 ```
 
@@ -50,7 +50,7 @@ tests/bupt/run.sh
 
 ```bash
 vivado -mode batch -source tests/bupt/ddr16_check.tcl \
-    -tclargs "$FPGA_BIT_HOME/fpga_top_debug.ltx"
+    -tclargs "$BIT_DIR/fpga_top_debug.ltx"
 ```
 
 在 2/6/10/14GB 和 16GB 末尾 8 字节分别写入不同 pattern 再读回，
@@ -58,4 +58,4 @@ vivado -mode batch -source tests/bupt/ddr16_check.tcl \
 
 ## 结果
 
-见仓库根 `README.md` 的“本版：16GB DDR + BUPT overlay”一节。
+见仓库根 `README.md` 第 5 节“测试内容与结果”。
