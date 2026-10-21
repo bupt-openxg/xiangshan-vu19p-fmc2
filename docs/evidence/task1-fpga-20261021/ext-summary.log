@@ -1,0 +1,6 @@
+EXT_INSTRUCTION_FIXED_VECTOR_TEST
+cases=52
+log=/home/april/Desktop/XiangShanVU19p/ReConstruct/build/tests/ext-instruction-test/run.log
+status=PASS
+summary=SUMMARY: 52/52 cases passed
+verdict=EXT instruction fixed-vector test: PASS

@@ -1,0 +1,18 @@
+FFT FUNCTIONAL TEST SUMMARY (FPGA)
+CONFIGURATION      RVV      RVV_EXT  STATUS  
+64-DFT             5/5      5/5      PASS    
+64-IDFT            5/5      5/5      PASS    
+128-DFT            5/5      5/5      PASS    
+128-IDFT           5/5      5/5      PASS    
+256-DFT            5/5      5/5      PASS    
+256-IDFT           5/5      5/5      PASS    
+512-DFT            5/5      5/5      PASS    
+512-IDFT           5/5      5/5      PASS    
+1024-DFT           5/5      5/5      PASS    
+1024-IDFT          5/5      5/5      PASS    
+2048-DFT           5/5      5/5      PASS    
+2048-IDFT          5/5      5/5      PASS    
+4096-DFT           5/5      5/5      PASS    
+4096-IDFT          5/5      5/5      PASS    
+
+total_cases=140 pass=140 fail=0 status=PASS

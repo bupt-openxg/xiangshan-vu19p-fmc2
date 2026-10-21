@@ -1,0 +1,4 @@
+XVBBP EXT RANDOM STIMULUS (FPGA)
+cases=10000000 ops=7 vxrm=0..3 sew=e16 vl=8
+log=/home/april/Desktop/XiangShanVU19p/ReConstruct/build/tests/random/run.log
+status=PASS

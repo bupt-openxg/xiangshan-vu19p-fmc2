@@ -1,0 +1,9 @@
+impl	kernel	cycle	repeat	average
+rvv	eq_zf_2x2	3941775	10	394177
+rvv	eq_mmse_2x2	6253626	10	625362
+rvv	eq_zf_4x4	39491835	10	3949183
+rvv	eq_mmse_4x4	39584640	10	3958464
+ext	eq_zf_2x2	4154877	10	415487
+ext	eq_mmse_2x2	4670040	10	467004
+ext	eq_zf_4x4	23411346	10	2341134
+ext	eq_mmse_4x4	23672060	10	2367206
