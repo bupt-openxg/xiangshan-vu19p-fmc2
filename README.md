@@ -329,24 +329,7 @@ SHA-256: 4c3268543da99a73d5fde0abef35b3c207e1c44a3674c13db3d23e7d0bd36e95
 
 比特流和实现报告不纳入 Git 仓库，构建时在 `out/` 下生成。
 
-## 6. 实现说明
-
-- **RTL 生成前保持依赖树干净**：香山会把 git 状态写进生成代码，overlay 已在
-  `flows/02` 中落成 Git 提交。
-- **`DifftestMacros.svh` 的位置**：该头文件不在 `cpu_files.tcl` 的 include
-  路径中，`flows/04` 会把它放入 RTL 目录后再打包。
-- **UART 后端**：AM 镜像必须使用 16550 后端：
-  `CPPFLAGS=-DUART16550=1`；16550 地址为 `0x310b0000`，分频系数 14。
-- **FFT 参考实现**：`oai_dfts.o` 使用 `-march=rv64gc` 编译，避免 SIMDe 的
-  SSE `dft16` 在 `-march=rv64gcv` 下映射到 RVV；EXT/RVV 内核仍使用 RVV。
-- **MIMO 工具链**：需要 xPack GCC 15，ABI 为 `lp64d`，并使能
-  `mstatus.VS`。
-- **DDR 配置**：`DDR_RANK_WIDTH=1` 对应 16GB 1Rx8；不要与 2Rx8 配置混用。
-  更换内存条后必须重新综合，不能复用旧比特流。
-- **综合内存**：建议构建机至少 64GB 内存；`report_power` 在
-  `write_bitstream` 前置步骤中执行。
-
-## 7. 来源与许可
+## 6. 来源与许可
 
 - XiangShan、YunSuan、env-scripts：木兰宽松许可证第 2 版（Mulan PSL v2）；
 - nexus-am：遵循上游仓库的许可证；
