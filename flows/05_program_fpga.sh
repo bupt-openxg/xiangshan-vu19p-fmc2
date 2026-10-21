@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 05 烧录比特流到 FPGA（JTAG; 约 3 分钟）
-#   比特流来源: build/fpga_top_debug.bit（本机构建, 或他人提供的 Releases 产物放到 build/）
-#   替代方式: AEConsole 的 FPGA Bin Download（需厂商 BSP, 见 docs/onboard-runbook.md）
+#   比特流来源: ${FPGA_BIT_HOME:-build}/fpga_top_debug.bit + .ltx
+#   服务器综合产物回传后，用 FPGA_BIT_HOME=artifacts/xvbbp-buptopenxg 指定。
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/env.sh" >/dev/null 2>&1 || true
 
-[ -f "$BUILD_ROOT/fpga_top_debug.bit" ] || {
-    echo "ERROR: 未找到 $BUILD_ROOT/fpga_top_debug.bit"
-    echo "  自行构建: flows/04_build_bitstream.sh（约 7 小时）"
-    echo "  或把已获得的较比特流 + .ltx 放入 build/ 后重跑本步骤"
+BIT_HOME="${FPGA_BIT_HOME:-$BUILD_ROOT}"
+[ -f "$BIT_HOME/fpga_top_debug.bit" ] || {
+    echo "ERROR: 未找到 $BIT_HOME/fpga_top_debug.bit"
+    echo "  先用 flows/04_package_server.sh 打包，在服务器综合后把 bit/ltx 回传"
+    echo "  或设置 FPGA_BIT_HOME 指向已有 bit/ltx 的目录"
     exit 1
 }
 
-echo "[05] 烧录 build/fpga_top_debug.bit → FPGA"
+echo "[05] 烧录 $BIT_HOME/fpga_top_debug.bit → FPGA"
 LOG="${BUILD_ROOT}/logs/program-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$(dirname "$LOG")"
 rc=0
@@ -29,4 +30,4 @@ fi
 
 echo
 echo "==== 烧录完成 ===="
-echo "下一步: flows/06_run_hello.sh（裸机 Hello）或 flows/07_run_linux.sh（Linux 镜像）"
+echo "下一步: tests/bupt/ddr16_check.tcl；然后 flows/10_run_bupt.sh"

@@ -10,6 +10,8 @@
 # ---- 构建产物 / 运行产物 ----
 /build/
 /logs/
+# 回传的 bit/ltx/报告（本机交付物，不入库）
+/artifacts/
 /out/                # mill 冒烟/临时调用的抓痕目录
 *.bit
 *.bin
@@ -31,10 +33,7 @@
 # xPack GCC 15（FFT/MIMO 工作负载；见 tools/setup/08-xpack-riscv-gcc.sh）
 /tools/xpack-riscv-none-elf-gcc-*
 
-# ---- 下载/生成的镜像与负载产物 ----
-/sw/linux/data.txt
-/sw/linux/data_kmh.zip
-/sw/linux/data_patched.txt
+# ---- 生成的镜像与负载产物 ----
 /sw/baremetal/*.elf
 /sw/baremetal/*.o
 /sw/baremetal/*.bin

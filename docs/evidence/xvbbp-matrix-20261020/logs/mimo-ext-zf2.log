@@ -1,5 +1,0 @@
-MIMO_EQ_BENCH backend=ext layout=eq2-packed-adaptive-guard validate_kernel=3 perf_kernel=1 sites2=15600 sites4=15600 lambda_q15=512
-MIMO_VALIDATE_PASS kernel=eq_zf_2x2 count=31200 tol=11 checksum=-1876700399
-MIMO_VALIDATE_ERROR_STATS kernel=eq_zf_2x2 tol=11 fail=0 components=62400 max_abs=9 mean_abs_x1000=1881 mse_x1000=5628 over_tol=0 over2=18415 over3=8715 over4=3385 over8=5 over16=0
-MIMO_DONE status=0 checksum=-1876700399
-Exit with code = 0

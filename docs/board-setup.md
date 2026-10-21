@@ -10,7 +10,7 @@
 | FPGA 配置/调试 | AMD JTAG CN10（14-pin 2×7） | 烧比特流 + JTAG-to-AXI 写 DDR 必须 |
 | CPU 串口 | 后面板 RJ45 用户串口（BG14=TX / BH14=RX） | 需 RJ45→USB 串口适配器，115200 8N1 |
 | 板卡管理 | USB 3.0 Type-B 或后板 GbE | AEConsole 连板卡控制器（ZYNQ） |
-| DDR4 子卡 | FMC2 HPC 槽（UV-FMCH-PDDR4DME + 1Rx8 8GB SODIMM） | 上电前插好 |
+| DDR4 子卡 | FMC2 HPC 槽（UV-FMCH-PDDR4DME + 1Rx8 16GB SODIMM，MT40A2G8VA-062E） | 上电前插好 |
 
 ## 2. AEConsole 一次性配置（不可省）
 

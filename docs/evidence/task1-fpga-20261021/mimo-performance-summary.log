@@ -1,8 +1,0 @@
-MIMO PERFORMANCE TEST SUMMARY (FPGA)
-CONFIGURATION  RVV          RVV_EXT      REDUCTION  STATUS
-2x2-ZF         394177       415487       -5.41%     FAIL  
-2x2-MMSE       625362       467004       25.32%     FAIL  
-4x4-ZF         3949183      2341134      40.72%     PASS  
-4x4-MMSE       3958464      2367206      40.20%     PASS  
-
-total_configurations=4 threshold=30% status=FAIL

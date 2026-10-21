@@ -7,19 +7,19 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 
 ## 不可变事实（动手前先确认上游是否有变）
 
-- 香山 commit：`4b9ddb8a6311bff6f5e29cb3722d1f4236d66292`；env-scripts 基线：`876f39e4cf690745a3951ac6c06ce5475d7d4f16`，其上 `git am` 应用 `patches/env-scripts/` 的 12 个补丁。
+- 香山 commit：`OpenXiangShan/XiangShan@0a150819` + BUPT overlay（4 + VIMacU glue）；YunSuan `996b51d` + BUPT overlay（10）。env-scripts 基线 `876f39e` + 13 个板卡补丁 + 16GB DDR overlay。
 - 器件 `xcvu19p-fsva3824-1-e`；Vivado 2024.2；板卡时钟（AEConsole）：GC02=80MHz(DDR 参考)、GC04=25MHz(CPU)、GC06=1MHz(RTC)，VADJ=1.2V。
 - 内存地址：DDR 载入点 `0x80000000`、UART16550 `0x310B0000`、裸机栈顶 `0x81000000`。
 
 ## 流程编排（flows/00..08，幂等，失败即停）
 
 ```
-00 宿主检查(Vivado/磁盘≥80G/swap≥32G)   01 工具链(全部本地化到 tools/, 无需 sudo)
-02 拉依赖+应用补丁      03 RTL(20-40min)   04 比特流(~7h)   05 烧录
-06 Hello                07 Linux           08 板卡诊断(~20min)
+00 宿主检查(Vivado/磁盘≥80G)   01 工具链(全部本地化到 tools/, 无需 sudo)
+02 拉依赖+overlay      03 RTL(20-40min)   04 打包服务器输入   05 烧录
+06 Hello                08 板卡诊断(~20min)   09 构建 BUPT 负载   10 上板测试
 ```
 
-命令与预期输出见 `README.md` §二；排障见 `docs/run-guide.md`。跳过 7h 构建的办法：把现成的 `fpga_top_debug.bit/.ltx` 放进 `build/`。
+命令与预期输出见 `README.md` §5。综合在服务器 `~/.zhaoleo/xvbbp-buptopenxg`，本机不做。跳过构建：把现成的 `fpga_top_debug.bit/.ltx` 放进 `FPGA_BIT_HOME` 指向的目录。
 
 ## submodule 陷阱（flows/02 已自动处理；手工操作必须知道）
 
@@ -32,10 +32,10 @@ description: 在本仓库执行"从零构建"（依赖拉取 → RTL 生成 → 
 
 ## RTL 生成
 
-- `cd third_party/XiangShan && make verilog CONFIG=MinimalConfig JVM_XMX=20G`；产物 `build/rtl`（1579 文件）。flows/03 附带模拟器残留检查（`tools/checks/rtl_check.sh`，DPI 须被 `ifndef SYNTHESIS` 门控）与后处理（`tools/patch_rtl.sh`：ClockGate 透传 / URAM ram_style / 移除 DummyDPI 例化链）。
+- `cd third_party/XiangShan && make verilog CONFIG=MinimalConfig JVM_XMX=20G`；产物 `build/rtl`（本版 1822 文件）。flows/03 附带模拟器残留检查（`tools/checks/rtl_check.sh`，DPI 须被 `ifndef SYNTHESIS` 门控）与后处理（`tools/patch_rtl.sh`：ClockGate 透传 / URAM ram_style / 移除 DummyDPI 例化链）。
 - **make 会因产物已存在而跳过重生成**：要强制重生成先 `rm -rf build/rtl`，否则 `patch_rtl.sh` 打在旧产物上（表现为"移除 0 处"）。
 - RTL 会内嵌 `gitDirty`（`NewCSR.sv` 的 `wire gitDirty`）与 `git diff` 注释（`XSTop.sv`）：**构建前保证 third_party/XiangShan 树干净（含全部 submodule）**，否则产出带 dirty 标记。清嵌套污染：`git -C <sub> submodule deinit -f <nested>`（曾因递归试验把 coupledL2 嵌套拉脏，逐层 ` m` 上报到顶层）。
-- 可复现性基线：干净树下重建的 RTL 与"上板验证过的原构建"逐字节比对 **1578/1579 一致**；唯一差异 `XSTop.fir` 是 FIRRTL 中间文件的源码定位器绝对路径字符串（345 万处，不参与综合）。
+- 可复现性基线：干净树下重建 RTL 后用 `tools/checks/rtl_check.sh` 检查 7 条编码与 `io_isComp/io_isConj`。
 - mill 编译产物有缓存；`build.sc` 的 `gitStatus` 是 `Task.Input`（每次运行重算）；JVM 内存默认 `JVM_XMX=20G`。
 
 ## 网络受限时的本地镜像验证法

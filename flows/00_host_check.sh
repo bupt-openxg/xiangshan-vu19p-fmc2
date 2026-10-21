@@ -12,7 +12,7 @@ warn() { printf '[WARN]  %s\n' "$1"; WARN=$((WARN+1)); }
 bad()  { printf '[FAIL]  %s\n' "$1"; FAIL=$((FAIL+1)); }
 
 echo "==== ReConstruct 宿主机检查 ===="
-for t in git curl python3 unzip sha256sum dpkg-deb tar; do
+for t in git curl python3 unzip sha256sum dpkg-deb tar zstd; do
     command -v "$t" >/dev/null 2>&1 && ok "$t" || bad "缺少命令: $t"
 done
 
@@ -25,17 +25,17 @@ fi
 mem=$(free -g 2>/dev/null | awk '/Mem:/{print $2}')
 swap=$(free -g 2>/dev/null | awk '/Swap/{print $2}')
 if [ -n "${mem:-}" ]; then
-    if [ "$mem" -ge 64 ]; then
+    if [ "$mem" -ge 32 ]; then
         ok "RAM ${mem}GB"
     else
-        warn "RAM ${mem}GB：本配置为 8-wide 后期香山（MinimalConfig），综合 elaboration 工作集约 90–110GB；15GB 机器预计只能 swap 抖动，建议构建机 RAM ≥64GB（推荐 128GB）"
+        warn "RAM ${mem}GB：本机只做 RTL 生成/软件构建/上板；建议 ≥32GB（Mill 生成 RTL）。Vivado 综合在服务器上跑（125GB）"
     fi
 fi
 if [ -n "${swap:-}" ]; then
-    if [ "$swap" -ge 64 ]; then
+    if [ "$swap" -ge 16 ]; then
         ok "swap ${swap}GB"
     else
-        warn "swap ${swap}GB（综合阶段辅助项，建议 ≥64GB；swap 不能替代物理内存，见 tools/setup/03-swap.sh）"
+        warn "swap ${swap}GB（RTL 生成辅助项；综合在服务器上跑，本机建议 ≥16GB）"
     fi
 fi
 

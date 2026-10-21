@@ -26,4 +26,4 @@ bash "$ROOT/tools/patch_rtl.sh" "$NOOP_HOME/build/rtl" | tail -8
 
 echo
 echo "==== RTL 就绪: $NOOP_HOME/build/rtl（$(ls "$NOOP_HOME/build/rtl" | wc -l) 个文件）===="
-echo "下一步: flows/04_build_bitstream.sh（创建工程+综合+实现+比特流，约 7 小时）"
+echo "下一步: flows/04_package_server.sh（打包 RTL/env-scripts，送服务器综合）"

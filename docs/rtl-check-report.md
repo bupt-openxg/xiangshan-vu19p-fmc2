@@ -1,8 +1,8 @@
 # RTL 模拟器残留检查报告（门控感知）
 
-- 检查目录: `XiangShan/build/rtl`
-- 生成时间: 2026-10-12 15:26:41
-- 文件数: 1574
+- 检查目录: `third_party/XiangShan/build/rtl`
+- 生成时间: 2026-10-21 15:45:01
+- 文件数: 1819
 
 ## 1. 顶层与模拟器专属模块
 - [OK] 顶层 XSTop.sv 存在（FPGA 顶层）
@@ -13,18 +13,18 @@
 
 ## 3. 仿真专用系统任务（$display/$readmem/plusargs 等, 无保护区）
 - [WARN] 无保护区命中 `release `:
-    XiangShan/build/rtl/MSHR.sv:286:     ~state_s_release & state_w_rprobeacklast & state_w_grantlast & state_w_replResp;
-    XiangShan/build/rtl/MSHR.sv:310:     state_s_refill & state_s_probeack & state_s_release & state_w_rprobeacklast
-    XiangShan/build/rtl/MSHR.sv:364:       state_s_release <= 1'h1;
+    third_party/XiangShan/build/rtl/MSHR.sv:281:     ~state_s_release & state_w_rprobeacklast & state_w_grantlast & state_w_replResp;
+    third_party/XiangShan/build/rtl/MSHR.sv:307:     state_s_refill & state_s_probeack & state_s_release & state_w_rprobeacklast
+    third_party/XiangShan/build/rtl/MSHR.sv:364:       state_s_release <= 1'h1;
 
 ## 4. Difftest 残留（标识符引用 = WARN; 无保护 DPI import 已在第2节按 ERROR 处理）
-- [WARN] 30 个文件存在 difftest 标识符引用（例化 DummyDPICWrapper/Difftest* 空模块链）:
-    XiangShan/build/rtl/AtomicsUnit.sv:261:   wire         _difftest_valid_T_1 = state == 4'h7;
-    XiangShan/build/rtl/AtomicsUnit.sv:295:   wire         difftest_valid = io_out_valid_0 & _difftest_valid_T_1 & isSc;
-    XiangShan/build/rtl/AtomicsUnit.sv:382:   wire         _GEN_16 = _difftest_valid_T_1 & io_out_valid_0;
-    XiangShan/build/rtl/AtomicsUnit.sv:811:   DummyDPICWrapper_44 difftest_module (
-    XiangShan/build/rtl/AtomicsUnit.sv:813:     .io_valid        (difftest_valid),
-    XiangShan/build/rtl/AtomicsUnit.sv:814:     .io_bits_valid   (difftest_valid),
+- [WARN] 32 个文件存在 difftest 标识符引用（例化 DummyDPICWrapper/Difftest* 空模块链）:
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:191:   wire         difftest_lrsc_success = success;
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:248:   wire         _difftest_valid_T_1 = state == 4'h7;
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:280:   wire [7:0]   difftest_lrsc_coreid = {2'h0, io_hartId};
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:281:   wire         difftest_gen_valid = io_out_valid_0 & _difftest_valid_T_1 & isSc;
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:367:   wire         _GEN_15 = _difftest_valid_T_1 & io_out_valid_0;
+    third_party/XiangShan/build/rtl/AtomicsUnit.sv:789:   DummyDPICWrapper_LrScEvent difftest_lrsc_1 (
     (这些模块体已被 `ifndef SYNTHESIS 门控, 综合时退化为空模块并被优化; 
      危险形式 = 无保护 import "DPI-C", 已在第2节校验为零; 最终以 Vivado 综合为仲裁)
 

@@ -117,7 +117,9 @@ if {$p_sw5 eq "" || $p_sw6 eq "" || $p_sw4 eq ""} {
 
 proc wr {p v} { set_property OUTPUT_VALUE $v $p; commit_hw_vio $p; after 300 }
 
-# ---- halt: sw6=0 ----
+# ---- halt + release DDR reset before JTAG writes ----
+wr $p_sw4 1
+wr $p_sw5 0
 wr $p_sw6 0
 refresh_hw_vio $vio
 puts "BOARD_HALT_DONE"

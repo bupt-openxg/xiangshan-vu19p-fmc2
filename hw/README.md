@@ -9,13 +9,13 @@ hw/pinmaps/   引脚表（board_io.csv / fmc2_ddr4_pins.csv）——XDC 生成�
 hw/diag/      板卡诊断比特流（独立小工程, 分钟级构建, 上板前置自检用）
 ```
 
-## 1. 上板连接（详见 docs/onboard-runbook.md）
+## 1. 上板连接（详见 README.md）
 
 | 项目 | 说明 |
 |---|---|
 | JTAG（配置/烧录） | CN10（标准 14-pin），Digilent 线；`localhost:3121/xilinx_tcf/Digilent/*` |
 | UART 控制台 | 后面板 **User (RJ45)**，仅 TX/RX；**115200 8N1**；适配器 = FT232R（`/dev/ttyUSB*`，用 `udevadm info -q property -n <dev> \| grep ID_MODEL` 甄别） |
-| DDR4 | FMC2 槽 + UV-FMCH-PDDR4DME 子卡 + 1Rx8 8GB SODIMM（单 rank） |
+| DDR4 | FMC2 槽 + UV-FMCH-PDDR4DME 子卡 + 1Rx8 16GB SODIMM（单 rank，MT40A2G8VA-062E） |
 | 时钟 | AEConsole PLL 输出（见下表）；板载 200MHz OSC |
 | 按键/开关 | **流程完全不使用**——复位/启动全部经 VIO + Tcl 控制 |
 
