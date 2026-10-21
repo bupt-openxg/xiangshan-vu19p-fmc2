@@ -10,6 +10,8 @@
 # ---- 构建产物 / 运行产物 ----
 /build/
 /logs/
+# 对外发布的 bit/ltx 压缩包，不入库
+/dist/
 # 回传的 bit/ltx/报告（本机交付物，不入库）
 /artifacts/
 /out/                # mill 冒烟/临时调用的抓痕目录
