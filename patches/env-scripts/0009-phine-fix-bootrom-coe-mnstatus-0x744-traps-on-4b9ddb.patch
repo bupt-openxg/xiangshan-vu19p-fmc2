@@ -17,9 +17,6 @@ Replace with a version-agnostic 3-instruction boot (no CSR ops):
   addiw x5,x0,1; slli x5,x5,31; jalr x0,0(x5)
 placed at word0 (sequential entry) AND word34=0x88 (the qspi redirect
 entry, matching the classic xs_kmh_fpga coe layout).
-Live ROM patched via flash jtag-axi and verified; CPU boots.
-Runtime patch tool: tools/patch_bootrom.{sh,tcl} (needed after each
-FPGA reconfiguration until a rebuilt bitstream is loaded).
 ---
  fpga_diff/src/tcl/common/blk_mem_gen_0.tcl | 24 +++++++++++++---------
  1 file changed, 14 insertions(+), 10 deletions(-)
