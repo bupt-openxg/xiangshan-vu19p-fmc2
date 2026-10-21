@@ -307,7 +307,7 @@ FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
 | CPU 组 WNS（25 MHz） | +11.822 ns |
 | WHS / THS | +0.010 ns / 0.000 ns |
 | 布线 | 2,343,203 条可布线条全部布通 |
-| DRC | 通过 |
+| DRC | 0 error / 170 warning（明细见 5.5） |
 | CLB LUTs | 1,771,122 / 4,085,760（43.35%） |
 | CLB Registers | 686,582 / 8,171,520（8.40%） |
 | Block RAM | 469 / 2,160（21.71%） |
@@ -317,7 +317,32 @@ FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
 说明：全局 WNS 由 DDR MIG 的 200 MHz 时钟组决定，不是 CPU 核的余量。
 若要提高 CPU 频率，需要单独分析 `DEBUG_CLK_IN` 组的关键路径。
 
-### 5.5 比特流
+### 5.5 DRC 结果
+
+Routed DRC 使用默认 ruledeck，结果为 **0 error、0 critical warning、170 warning**：
+
+| 级别 | 数量 |
+|---|---:|
+| Error | 0 |
+| Critical Warning | 0 |
+| Warning | 170 |
+| **合计** | **170** |
+
+Warning 分类：
+
+| Rule | 检查项 | 数量 |
+|---|---|---:|
+| PDCN-1569 | LUT equation term check | 17 |
+| PDRC-132 | SLICE_PairEqSame_A6A5_WARN | 118 |
+| PDRC-136 | SLICE_PairEqSame_C6C5_WARN | 2 |
+| PDRC-140 | SLICE_PairEqSame_A6A5_WARN | 31 |
+| PDRC-153 | Gated clock check | 1 |
+| RTSTAT-10 | No routable loads | 1 |
+
+以上均为 warning 级检查，不阻断比特流生成；对应比特流已完成烧录、DDR 检查和
+60/60 BUPT 负载测试。
+
+### 5.6 比特流
 
 ```text
 fpga_top_debug.bit
