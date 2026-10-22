@@ -22,9 +22,9 @@ void w3main(void) {
     unsigned long n = SZ/8, i, err;
     volatile unsigned long *p = (volatile unsigned long *)REG;
 
-    // UART 分频 (115200 @ 25MHz)
+    // UART 分频 (115200 @ 30MHz)
     *(volatile unsigned int *)0x310B000CUL = 0x83;
-    *(volatile unsigned int *)0x310B0000UL = 14;
+    *(volatile unsigned int *)0x310B0000UL = 16;
     *(volatile unsigned int *)0x310B0004UL = 0;
     *(volatile unsigned int *)0x310B000CUL = 0x03;
     puts_("\r\nW3\r\n");

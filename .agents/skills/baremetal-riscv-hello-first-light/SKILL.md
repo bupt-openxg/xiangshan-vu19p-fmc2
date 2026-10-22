@@ -11,7 +11,7 @@ description: 在新 RISC-V SoC/FPGA 上点亮第一个裸机 UART Hello，或排
 2. **无 libc 程序必须 `-static`**。默认动态链接会给程序塞入 `.interp/.dynamic/.got` 等**可加载段**，混进镜像；`-fno-PIE` 不能替代 `-static`。
 3. **build-id 的位置随链接脚本而变**：`.note.gnu.build-id` 可能尾随 `.text`（无害，本仓库 hello 配方即如此）也可能顶掉入口地址（表现为"执行的不是入口"）。换任何 lds 后都要检查产物段表（`objcopy -h`）与入口地址；不确定就 `-Wl,--build-id=none`。
 4. **objcopy 段过滤按程序定，不能套模板**：`-j .text -j .rodata` 会丢掉放在 `.data`（非 const 数组字符串）或 `.srodata`（小只读数据）里的常量；不过滤则可能把尾随 `.note` 带进镜像。判断流程：`readelf -S` 看常量在哪个段 → 决定过滤与否（本仓库三个程序三种配方的对照见 `sw/baremetal/Makefile` 头注释）。
-5. **16550 分频必须程序自设**：复位默认分频 162 = **9600 波特**（上板实测 DLL=0xA2）。`LCR=0x83 → DLL=14, DLM=0 → LCR=0x03`（25MHz/16/14 ≈ 111.6kbps ≈ 115200），输出前等待 LSR.THRE。
+5. **16550 分频必须程序自设**：复位默认分频 162 = **9600 波特**（上板实测 DLL=0xA2）。`LCR=0x83 → DLL=16, DLM=0 → LCR=0x03`（30MHz/16/16 ≈ 117.2kbps），输出前等待 LSR.THRE。
 
 ## 配套技巧
 

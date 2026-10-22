@@ -32,7 +32,7 @@ CFLAGS_COMMON := -nostartfiles -nostdlib -mcmodel=medany -mabi=lp64 -fno-PIE -O2
 
 all: hello.txt hello2.txt wtest3.txt
 
-# ---- hello: 主负载 (C, 含 UART 分频初始化 115200@25MHz) ----
+# ---- hello: 主负载 (C, 含 UART 分频初始化 115200@30MHz) ----
 hello.elf: hello.c hello.lds
 	$(CC) -T hello.lds $(CFLAGS_COMMON) -march=rv64imac \
 	      -Wl,--defsym=MEM_START=0x80000000 -o $@ hello.c

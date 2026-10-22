@@ -32,10 +32,10 @@ PHINE PD-VU19P-2-LSI SOLO v3，运行 BUPT `riscv-xvbbp` 的 FFT/MIMO 裸机负�
 | nexus-am | `086a238062fdfb3281b745a537b361983d0154b5` + 板级 overlay |
 | env-scripts | `876f39e4cf690745a3951ac6c06ce5475d7d4f16` + 13 板卡补丁 + 16GB DDR overlay |
 | riscv-xvbbp | `c55392867c9d7c99c1677f49d6cfa0652a0e2be3` |
-| CPU 时钟 | **25 MHz**（`clk5` / GC04 / `DEBUG_CLK_IN` 40 ns） |
+| CPU 时钟 | **30 MHz**（内部 MMCM，25 MHz 参考；`DEBUG_CLK_IN` 40 ns） |
 | DDR 参考 | 80 MHz（`clk7` / GC02 / `InputClockPeriod 12500`） |
 | DDR | 16GB 1Rx8，`MT40A2G8VA-062E`，1 rank，64-bit，AXI 34 位，1600 MT/s |
-| UART | 16550 @ `0x310b0000`，divisor 14 |
+| UART | 16550 @ `0x310b0000`，divisor 16 |
 | 器件 | `xcvu19p-fsva3824-1-e`，Vivado 2024.2 |
 | 工具链 | xPack GNU RISC-V GCC 15.2（`tools/setup/08`） |
 

@@ -8,7 +8,7 @@
 本版本的主要目标：
 
 - 16GB 1Rx8 DDR4 内存配置；
-- CPU 核 25 MHz，DDR MIG 1600 MT/s；
+- CPU 核 30 MHz（25 MHz 参考经 MMCM 生成），DDR MIG 1600 MT/s；
 - 使用官方 XiangShan / YunSuan / nexus-am / env-scripts，XVBBP 以 overlay 方式集成；
 - 完整跑通 BUPT 的 48 个 FFT 和 12 个 MIMO 镜像，共 60/60 通过。
 
@@ -37,22 +37,23 @@ XiangShan 相对官方基线只改动 5 个源文件和 1 个 yunsuan gitlink；
 
 | 时钟 | 频率 | 引脚 | 用途 |
 |---|---:|---|---|
-| `clk5` / CPU 系统 | **25 MHz** | BA51/BB51 | `DEBUG_CLK_IN`，周期 40.000 ns；CPU 核和系统总线 |
+| `clk5` / 25 MHz 参考 | 25 MHz | BA51/BB51 | `DEBUG_CLK_IN`，周期 40.000 ns；MMCM 输入 |
+| CPU / 系统 | **30 MHz** | 内部 | MMCM `25 MHz × 24 / 20`，周期 33.333 ns；CPU、UART、VIO |
 | `clk7` / DDR 参考 | **80 MHz** | BM44/BN44 | MIG `InputClockPeriod = 12500`；UI 200 MHz，PHY 1600 MT/s |
 | `clk8` / RTC | **1 MHz** | E57/E58 | `TMCLK`，周期 1000.000 ns |
 | `clk6` / 板载 | **200 MHz** | BW37/BY37 | `CPU_CLK_IN`，供 `cqetmclk`/CRG，不是 CPU 核时钟 |
 | JTAG | 12 MHz | CN10 | `jtag_vclk`，周期 83.333 ns |
 
 AEConsole 配置：FMC2 **VADJ = 1.2 V**，PLL 输出 `GC02 = 80 MHz`、
-`GC04 = 25 MHz`、`GC06 = 1 MHz`。
+`GC04 = 25 MHz`、`GC06 = 1 MHz`；`GC04` 作为 MMCM 的 25 MHz 参考。
 
 注意区分：
 
 - `CPU_CLK_IN = 200 MHz` 是 `clk6`，不是 CPU 核频率；
 - `mmcm_clkout5 = 50 MHz` 是 DDR MIG 的内部输出，也不是 CPU 核频率；
-- CPU 核由 `clk5` 驱动，本版本为 **25 MHz**。
+- CPU 核由内部 MMCM 从 `clk5` 的 25 MHz 生成，本版本为 **30 MHz**。
 
-UART 使用 16550，基地址 `0x310b0000`，115200 8N1；25 MHz 下分频系数为 14。
+UART 使用 16550，基地址 `0x310b0000`，115200 8N1；30 MHz 下分频系数为 16（约 117.2 kbps）。
 
 ### 2.2 DDR
 
@@ -292,28 +293,30 @@ FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
 - MIMO 每个 kernel 均通过 `MIMO_VALIDATE_PASS`，`MIMO_DONE status=0`；
 - 60 个镜像顺序上板，约 14 分钟完成。
 
-### 5.3 时序结果
+以上 60/60 为 25 MHz 版本的测试结果；30 MHz 版本本次只生成比特流，尚未重新上板测试。
+
+### 5.3 时序结果（30 MHz）
 
 按路径所涉及的 SLR 统计，routed 设计的 WNS：
 
 | 区域 | WNS (ns) |
 |---|---:|
-| SLR0 | **+0.379** |
-| SLR1 | **+11.822** |
-| SLR2 | **+11.822** |
-| SLR3 | **+20.613** |
-| **总体 WNS** | **+0.379** |
+| SLR0 | **+0.525** |
+| SLR1 | **+5.711** |
+| SLR2 | **+6.940** |
+| SLR3 | **+8.228** |
+| **总体 WNS** | **+0.525** |
 | **总体 TNS** | **0.000** |
 
 所有区域均无时序违例，总体 TNS 为 0.000 ns。SLR0 的最差路径对应
-DDR MIG 的 200 MHz 时钟组；SLR1/SLR2 的 WNS 对应 25 MHz CPU 组路径。
+DDR MIG 的 200 MHz 时钟组；其余 SLR 由 30 MHz CPU 组路径决定。
 
 ### 5.4 比特流
 
 
 ```text
 fpga_top_debug.bit
-SHA-256: f76a42dd71df4e963dc68b04c32838b76fd0419661283da6829370eaed0b2896
+SHA-256: 25e440963300527d04d6943982c3d95b2db8f6f4a1ee363a8cd39c999739d508
 
 fpga_top_debug.ltx
 SHA-256: 4c3268543da99a73d5fde0abef35b3c207e1c44a3674c13db3d23e7d0bd36e95

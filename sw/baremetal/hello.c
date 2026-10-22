@@ -18,10 +18,10 @@
 #define UART_LSR  (*(volatile unsigned int *)(UART_BASE + 0x14)) // 线路状态: bit5=THRE, bit6=TEMT
 
 // 关键: 复位后 uart16550 的默认分频约为 38400 波特, 必须自行设置为 115200
-// (25MHz/(16*14) = 111.6kbps, 误差 3%; 官方 Linux 镜像由内核驱动设置分频)
+// (30MHz/(16*16) = 117.2kbps, 误差 1.7%)
 static void uart_init(void) {
     UART_LCR = 0x83;    // DLAB=1, 8N1
-    UART_DLL = 14;
+    UART_DLL = 16;
     UART_DLM = 0;
     UART_LCR = 0x03;    // DLAB=0, 8N1
 }

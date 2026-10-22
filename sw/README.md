@@ -27,7 +27,7 @@ make -C sw/baremetal
 1. C 程序入口先设栈（`start.S`：`li sp,0x81000000`），否则 `sd ra,8(sp)` 双陷阱。
 2. 无 libc 程序静态链接，避免 `.interp/.dynamic` 混入镜像。
 3. objcopy 段过滤按程序定：hello 不过滤，hello2 过滤 `.note`，wtest3 不过滤。
-4. UART 16550 必须程序自设分频：`LCR=0x83 → DLL=14, DLM=0 → LCR=0x03`。
+4. UART 16550 必须程序自设分频：`LCR=0x83 → DLL=16, DLM=0 → LCR=0x03`（30 MHz）。
 
 写入与运行：`tests/common/board_run.sh` 或 `flows/06_run_hello.sh`。
 负载文本由 `tools/bin/bin2fpgadata` 生成。

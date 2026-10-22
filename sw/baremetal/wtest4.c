@@ -28,8 +28,8 @@ void bmain(void) {
     def_ier = *(volatile unsigned int *)(UART+0x04) & 0xFF;
     def_fcr = *(volatile unsigned int *)(UART+0x08) & 0xFF;
 
-    // 2) 设置 115200 (25MHz, 分频 14)
-    *lcr = 0x83; *thr = 14; *(volatile unsigned int *)(UART+0x04) = 0; *lcr = 0x03;
+    // 2) 设置 115200 (30MHz, 分频 16)
+    *lcr = 0x83; *thr = 16; *(volatile unsigned int *)(UART+0x04) = 0; *lcr = 0x03;
     *lcr = 0x03;  // 8N1
 
     // 3) 打印默认寄存器

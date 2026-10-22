@@ -30,8 +30,8 @@ BUPT 测试用 `tests/common/board_run.sh` 在一次 Vivado 会话里合并
 
 ## 串口
 
-- 115200 8N1；16550 @ `0x310b0000`，25 MHz 下 divisor 14。
-- 程序必须自己写 `LCR=0x83 → DLL=14, DLM=0 → LCR=0x03`；16550 复位默认
+- 115200 8N1；16550 @ `0x310b0000`，30 MHz 下 divisor 16。
+- 程序必须自己写 `LCR=0x83 → DLL=16, DLM=0 → LCR=0x03`；16550 复位默认
   分频 162 是 9600，会全静默。
 - `stty -F /dev/ttyUSB0 115200 cs8 -cstopb -parenb -crtscts -echo raw`；
   GNU `stty raw` 不清 echo，必须显式 `-echo`。

@@ -1,12 +1,12 @@
-# hello2: 自设 UART 分频 (115200 @ 25MHz -> divisor=14) 的裸机 Hello
+# hello2: 自设 UART 分频 (115200 @ 30MHz -> divisor=16) 的裸机 Hello
     .section .text
     .globl _start
 _start:
     li   x9, 0x310B0000
-    # UART 初始化: LCR=0x83 (DLAB=1,8N1) -> DLL=14, DLM=0 -> LCR=0x03
+    # UART 初始化: LCR=0x83 (DLAB=1,8N1) -> DLL=16, DLM=0 -> LCR=0x03
     li   x8, 0x83
     sw   x8, 12(x9)
-    li   x8, 14
+    li   x8, 16
     sw   x8, 0(x9)
     sw   x0, 4(x9)
     li   x8, 0x03

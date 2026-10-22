@@ -61,10 +61,10 @@ void __am_16550_putchar(char ch) {
 
 void __am_init_16550(){
   unsigned int divisor;
-  /* ReConstruct: this board's UART reference clock is 25 MHz (the
-     upstream value assumed 50 MHz). 25e6 / (16 * 115200) = 13.56 -> 14,
-     i.e. ~111.6 kbps, matching the validated 115200 8N1 setting. */
-  divisor = 14;
+  /* ReConstruct: the CPU/UART reference is 30 MHz on this branch.
+     30e6 / (16 * 115200) = 16.28 -> 16, i.e. ~117.2 kbps; the host
+     still uses 115200 8N1 (1.7% baud error). */
+  divisor = 16;
 
   outl(SERIAL_MMIO + IER, 0x00);
 

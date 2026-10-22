@@ -43,7 +43,7 @@ opcode `0x57`，funct3 `000`，SEW=16，固定寄存器 vd=v16 / vs2=v20 / vs1=v
 1. 生成 RTL 前 XiangShan/YunSuan 工作树必须干净（香山把 dirty 写进 RTL）。
 2. `DifftestMacros.svh` 不在 `cpu_files.tcl` 的 include_dirs；`flows/04` 复制到
    `build/rtl/DifftestMacros.svh`，打包后在 `rtl/rtl/`。
-3. AM 镜像必须 `CPPFLAGS=-DUART16550=1`（16550 @ `0x310b0000`，divisor 14）。
+3. AM 镜像必须 `CPPFLAGS=-DUART16550=1`（16550 @ `0x310b0000`，divisor 16）。
 4. FFT 的 `oai_dfts.o` 必须 `-march=rv64gc`；SIMDe SSE dft16 若编成 RVV，
    本核重复调用会卡死。EXT/RVV 内核本身仍用 `-march=rv64gcv`。
 5. MIMO 必须 xPack GCC 15；ABI `lp64d`；`mstatus.VS=Initial`。

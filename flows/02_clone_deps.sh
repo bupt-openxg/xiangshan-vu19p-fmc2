@@ -112,7 +112,7 @@ cp -a "$ROOT/overlays/local/xiangshan/VIMacU.scala" \
 
 # yunsuan 先提交，父仓库才能记录新的 gitlink
 if ! git -C "$YS_REPO" symbolic-ref -q HEAD >/dev/null; then
-    git -C "$YS_REPO" switch -c xvbbp-overlay
+    git -C "$YS_REPO" switch -C xvbbp-overlay
 fi
 git -C "$YS_REPO" add -A
 if ! git -C "$YS_REPO" diff --cached --quiet; then
@@ -123,7 +123,7 @@ fi
     echo "[02] ERROR: yunsuan 工作树不干净"; exit 1; }
 
 if ! git -C "$TP/XiangShan" symbolic-ref -q HEAD >/dev/null; then
-    git -C "$TP/XiangShan" switch -c xvbbp-overlay
+    git -C "$TP/XiangShan" switch -C xvbbp-overlay
 fi
 git -C "$TP/XiangShan" add -A
 if ! git -C "$TP/XiangShan" diff --cached --quiet; then
@@ -183,11 +183,13 @@ else
     git -c user.name="ReConstruct" -c user.email="reconstruct@local" \
         am -q "$ROOT"/patches/env-scripts/*.patch
 fi
-echo "[02] 应用 16GB DDR / JTAG overlay"
+echo "[02] 应用 16GB DDR / JTAG / 30MHz CPU overlay"
 cp -a "$ROOT/overlays/board/env-scripts/fpga_diff/vivado/tcl/common/xs_uart.tcl" \
       "$TP/env-scripts/fpga_diff/vivado/tcl/common/xs_uart.tcl"
 cp -a "$ROOT/overlays/board/env-scripts/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl" \
       "$TP/env-scripts/fpga_diff/vivado/tcl/common/jtag_ddr_subsys.tcl"
+cp -a "$ROOT/overlays/board/env-scripts/fpga_diff/src/rtl/common/fpga_top_debug.sv" \
+      "$TP/env-scripts/fpga_diff/src/rtl/common/fpga_top_debug.sv"
 cd "$ROOT"
 
 echo
