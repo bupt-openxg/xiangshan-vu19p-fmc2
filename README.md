@@ -290,23 +290,15 @@ FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
   `vscmacccj`、`vscaddconj`、`vscaddrq`、`vscaddrtq`；
 - FFT 与 OAI 参考结果对比，全部 `CHECK: PASS`；
 - MIMO 每个 kernel 均通过 `MIMO_VALIDATE_PASS`，`MIMO_DONE status=0`；
-- 60 个镜像顺序上板，约 14 分钟完成。
 
 ### 5.3 时序结果
 
 按路径所涉及的 SLR 统计，routed 设计的 WNS：
 
-| 区域 | WNS (ns) |
+| 时序 | WNS (ns) |
 |---|---:|
-| SLR0 | **+0.379** |
-| SLR1 | **+11.822** |
-| SLR2 | **+11.822** |
-| SLR3 | **+20.613** |
 | **总体 WNS** | **+0.379** |
 | **总体 TNS** | **0.000** |
-
-所有区域均无时序违例，总体 TNS 为 0.000 ns。SLR0 的最差路径对应
-DDR MIG 的 200 MHz 时钟组；SLR1/SLR2 的 WNS 对应 25 MHz CPU 组路径。
 
 ### 5.4 比特流
 
