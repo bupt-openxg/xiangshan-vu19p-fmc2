@@ -272,7 +272,7 @@ halt -> JTAG 写 DDR -> VIO 复位 -> 串口抓取
 | MIMO | scalar / RVV / EXT，各 2×2/4×4 ZF/MMSE | 12 |
 | 合计 | — | 60 |
 
-FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
+FFT 覆盖 16、64、128、256、512、1024、2048、4096 点。MIMO 覆盖
 2×2 和 4×4 的 ZF/MMSE 均衡。
 
 ### 5.2 测试结果
@@ -291,9 +291,9 @@ FFT 覆盖 16、32、64、128、256、512、1024、4096 点。MIMO 覆盖
   `vscmacccj`、`vscaddconj`、`vscaddrq`、`vscaddrtq`；
 - FFT 与 OAI 参考结果对比，全部 `CHECK: PASS`；
 - MIMO 每个 kernel 均通过 `MIMO_VALIDATE_PASS`，`MIMO_DONE status=0`；
-- 60 个镜像顺序上板，约 14 分钟完成。
+- 60 个镜像顺序上板，约 12 分钟完成。
 
-以上 60/60 为 25 MHz 版本的测试结果；30 MHz 版本本次只生成比特流，尚未重新上板测试。
+30 MHz 版本已完成上板测试，60/60 通过。
 
 ### 5.3 时序结果（30 MHz）
 
