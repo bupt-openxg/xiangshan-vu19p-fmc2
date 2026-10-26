@@ -46,6 +46,11 @@ cat >> "$AM/apps/fft/Makefile" <<'EOF'
 $(DST_DIR)/./oai_dfts.o: CFLAGS := $(filter-out -march=rv64gc -march=rv64gcv,$(CFLAGS)) -march=rv64gc
 EOF
 
+# ReConstruct: whole-main mcycle measurement via --wrap=main.
+TIME_MK="$ROOT/tests/bupt/timewrap/bupt_timewrap.mk"
+printf '\ninclude %s\n' "$TIME_MK" >> "$AM/apps/fft/Makefile"
+printf '\ninclude %s\n' "$TIME_MK" >> "$AM/apps/mimo/Makefile"
+
 # UART backend macro is not tracked by make; force a clean AM build.
 rm -rf "$AM/am/build" "$AM/libs/klib/build"
 

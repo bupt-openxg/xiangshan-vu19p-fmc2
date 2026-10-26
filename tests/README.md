@@ -46,6 +46,29 @@ tests/bupt/run.sh
 输出：`build/bupt-<date>/logs/<key>.log`、`summary.tsv`，最后一行
 `BUPT_RESULT total=60 pass=.. fail=..`。
 
+## CPU 运行时间
+
+`tests/bupt/build.sh` 会通过 `--wrap=main` 给 FFT/MIMO 镜像加一个轻量计时包装器
+（`tests/bupt/timewrap/`）。程序在 `main` 入口和返回处读取 64 位 `mcycle`，
+打印：
+
+```text
+BUPT_TIME main_cycles=<cycles> us=<us> ms=<ms>
+```
+
+`tests/bupt/run.sh` 会把该行解析到 `runtime.tsv`：
+
+```text
+kind  key  test_status  cycles  us  ms
+```
+
+计时口径是整个 `main`：包含输入生成、参考模型/校验、计算和 `printf`/UART 等待；
+不包含烧录、DDR 加载、bootloader 和 `_halt` 后的死循环。30 MHz CPU 下按
+`us = cycles / 30`、`ms = cycles / 30000` 换算。
+
+当前镜像是 validate 构建，因此小点数 FFT 和 MIMO 的运行时间会包含参考模型和
+串口输出，不能直接当作纯 kernel 性能。
+
 ## DDR 检查
 
 ```bash
@@ -58,4 +81,5 @@ vivado -mode batch -source tests/bupt/ddr16_check.tcl \
 
 ## 结果
 
-见仓库根 `README.md` 第 5 节“测试内容与结果”。
+30 MHz 版本的 60 行程序运行时间见 `tests/bupt/runtime-30mhz.tsv`；
+汇总和测试结论见仓库根 `README.md` 第 5 节“测试内容与结果”。
