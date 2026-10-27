@@ -82,4 +82,5 @@ vivado -mode batch -source tests/bupt/ddr16_check.tcl \
 ## 结果
 
 30 MHz 版本的 60 行程序运行时间见 `tests/bupt/runtime-30mhz.tsv`；
+Excel 版（秒单位）见 `tests/bupt/runtime-30mhz.xlsx`。
 汇总和测试结论见仓库根 `README.md` 第 5 节“测试内容与结果”。
